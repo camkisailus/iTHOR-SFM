@@ -124,25 +124,31 @@ class Agent():
             return self.followPath(path)
         else:  
             path = self.nav.navTo(self.cur_pose,  goal)
+            print("Num steps: {}".format(len(path)))
             return self.followPath(path)
 
     def stepPath(self, step):
+        # print(step)
         if step == "forward":
+            # print("Stepping Forward")
             self.controller.step(
                 action="MoveAhead",
                 moveMagnitude=0.25
             )
         elif step == "backward":
+            # print("Stepping Backward")
             self.controller.step(
                 action="MoveBack",
                 moveMagnitude=0.25
             )
         elif step == "turn_right":
+            # print("Stepping Right")
             self.controller.step(
                 action="RotateRight",
                 degrees=90
             )
         elif step == "turn_left":
+            # print("Stepping Left")
             self.controller.step(
                 action="RotateLeft",
                 degrees=90
@@ -152,13 +158,15 @@ class Agent():
             'z':self.controller.last_event.metadata['agent']['position']['z'],
             'yaw':self.controller.last_event.metadata['agent']['rotation']['y']
         }
+        print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
         # rgb = 
-        topdown_img = self.controller.last_event.third_party_camera_frames[0]
-        self.topdown_frames.append(topdown_img)
-        cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/thor_test/top_down/{}.png".format(self.cam_idx), topdown_img)
-        self.cam_idx += 1
+        # topdown_img = self.controller.last_event.third_party_camera_frames[0]
+        # self.topdown_frames.append(topdown_img)
+        # cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/thor_test/top_down/{}.png".format(self.cam_idx), topdown_img)
+        # self.cam_idx += 1
 
     def followPath(self, path):
-        for step in path:
+        for i,step in enumerate(path):
+            print("Step: {}".format(i))
             self.stepPath(step)
         return True

@@ -1,4 +1,5 @@
 import numpy as np
+# import math
 import random
 
 class Node():
@@ -124,13 +125,35 @@ class Navigation():
                         nodes_to_visit.append(node)
 
             if goal_reached:
+                goal_rotation = goal_pose['yaw']
+                print("Old Goal: ({}, {}, {})".format(goal_node.x, goal_node.z, goal_node.rotation))
+                if goal_node.rotation != goal_rotation:
+                    # Add in place rotations to match goal_rotation
+                    print("Mismatch in goal_node and goal_rotation. node: {} goal: {}".format(goal_node.rotation, goal_rotation))
+                    diff = goal_rotation - goal_node.rotation
+                    num_turns = int(np.abs(diff/90))
+                    print("Num turns: {}".format(num_turns))
+                    if diff < 0:
+                        # rotate left
+                        node = Node(goal_node, "turn_left", (goal_node.x, goal_node.z), goal_node.rotation-90.0)
+                        while node.rotation != goal_rotation:
+                            node = Node(node, "turn_left", (node.x, node.z), node.rotation-90.0)
+                    else: 
+                        # rotate right
+                        node = Node(goal_node, "turn_right", (goal_node.x, goal_node.z), goal_node.rotation+90.0)
+                        while node.rotation != goal_rotation:
+                            node = Node(node, "turn_right", (node.x, node.z), node.rotation+90.0)
+                    
+                    goal_node = node
+                    print("New Goal: ({}, {}, {})".format(goal_node.x, goal_node.z, goal_node.rotation))
                 # trace path
                 # print("PATH FOUND!")
                 cur_node = goal_node
-                # positions = [] # keep track of positions along path
+                positions = [] # keep track of positions along path
                 actions = [] # keep track of actions taken to reach goal
                 while cur_node.parent is not None:
-                    # positions.append((cur_node.x, cur_node.z))
+                    # print("Current Node Position: ({}, {}, {}) Action: {}".format(cur_node.x, cur_node.z, cur_node.rotation, cur_node.action))
+                    positions.append((cur_node.x, cur_node.z, cur_node.rotation))
                     if cur_node.action == 'left':
                         actions.append('forward')
                         actions.append('turn_left')
@@ -142,7 +165,9 @@ class Navigation():
                         actions.append(cur_node.action)
                     cur_node = cur_node.parent
                 actions.reverse()
-                # positions.reverse()
+                positions.reverse()
+                print(positions)
+                print(actions)
                 # print(positions)
                 # pos_np = np.zeros((len(positions), 2))
                 # for i,pos in enumerate(positions):
