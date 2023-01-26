@@ -85,6 +85,7 @@ if __name__ == "__main__":
     ag = Agent(controller, agent_pose)
     ag.searchFor(object_name="Pillow")
     ag.goTo(goal="random")
+    # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)
     while True:

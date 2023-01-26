@@ -11,12 +11,12 @@ class ParticleFilter:
             "actionReturn"
         ]
         nPoses = len(self.valid_poses)
-        self.particles = np.zeros([nPoses, 3])  # 4 rotations for each x,z pose
-        self.nParticles = nPoses
-        self.weights = (1 / (nPoses)) * np.ones((nPoses))  # initialize weights
+        self.nParticles = nPoses*4
+        self.particles = np.zeros([self.nParticles, 3])  # 4 rotations for each x,z pose
+        self.weights = (1 / (self.nParticles)) * np.ones((self.nParticles))  # initialize weights
         idx = 0
         for pose in self.valid_poses:
-            for rot in [0]:#, 90, 180, 270]:
+            for rot in [0, 90, 180, 270]:
                 self.particles[idx, 0] = pose["x"]
                 self.particles[idx, 1] = pose["z"]
                 self.particles[idx, 2] = rot
@@ -91,11 +91,12 @@ class ObjectParticleFilter(ParticleFilter):
                     )
         if not observed_obj:
             # Add negative region around robot
-            print("Adding negative robot pose ({}, {})".format(observation_msg['robot_pose']['x'], observation_msg['robot_pose']['z']))
+            # print("Adding negative robot pose ({}, {})".format(observation_msg['robot_pose']['x'], observation_msg['robot_pose']['z']))
             robot_pose = observation_msg["robot_pose"]
             visibility = 1.5  # m
             fov = 90  # degrees
-            self.negative_poses.append(robot_pose)
+            if robot_pose not in self.negative_poses:
+                self.negative_poses.append(robot_pose)
 
     def assignWeight(self, particle):
         # for region in self.negative_regions:
@@ -111,7 +112,7 @@ class ObjectParticleFilter(ParticleFilter):
             if (
                 particle[0] == interactable_pose["x"]
                 and particle[1] == interactable_pose["z"]
-                #and particle[2] == interactable_pose["yaw"]
+                and particle[2] == interactable_pose["yaw"]
             ):
                 return 1.0
         return 0.2
@@ -121,8 +122,6 @@ class ObjectParticleFilter(ParticleFilter):
             weight = self.assignWeight(particle)
             self.weights[i] = weight
         self.weights /= np.sum(self.weights)
-        # print(np.sum(self.weights))
-        # assert(np.sum(self.weights) == 1)
 
 
 class FrameParticleFilter(ParticleFilter):

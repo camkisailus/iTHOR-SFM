@@ -106,18 +106,16 @@ class Agent:
                 # print(
                 #     "{} located at ({})".format(obj_id.split("|")[0], world_coords)
                 # )
-                if utils.cleanObjectID(obj_id) == object_name:
-                    print("Found a {}".format(object_name))
-                    interactable_poses = self.controller.step(
-                        action="GetInteractablePoses",
-                        objectId=obj_id,
-                        horizons=[0],
-                        standings=[True],
-                    ).metadata["actionReturn"]
-                    if interactable_poses is not None:
-                        object_detection_msg[obj_id] = interactable_poses
-                    # if utils.cleanObjectID(obj_id) == object_name:
-                    #     print("Interactable_poses: {}".format(interactable_poses))
+                interactable_poses = self.controller.step(
+                    action="GetInteractablePoses",
+                    objectId=obj_id,
+                    horizons=[0],
+                    standings=[True],
+                ).metadata["actionReturn"]
+                if interactable_poses is not None:
+                    object_detection_msg[obj_id] = interactable_poses
+                # if utils.cleanObjectID(obj_id) == object_name:
+                #     print("Interactable_poses: {}".format(interactable_poses))
                 # return obj_id, interactable_poses  # reachable poses of object
         except:
             pass
@@ -174,10 +172,11 @@ class Agent:
         }
         # print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
         # rgb =
-        # topdown_img = self.controller.last_event.third_party_camera_frames[0]
-        # self.topdown_frames.append(topdown_img)
-        # cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/thor_test/top_down/{}.png".format(self.cam_idx), topdown_img)
-        # self.cam_idx += 1
+        print("Saving Img")
+        topdown_img = self.controller.last_event.third_party_camera_frames[0][:,:,::-1]
+        self.topdown_frames.append(topdown_img)
+        cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/{}.png".format(self.cam_idx), topdown_img)
+        self.cam_idx += 1
         # self.processRGB()
 
     def followPath(self, path):
