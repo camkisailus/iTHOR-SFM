@@ -124,7 +124,7 @@ class Agent():
             return self.followPath(path)
         else:  
             path = self.nav.navTo(self.cur_pose,  goal)
-            print("Num steps: {}".format(len(path)))
+            # print("Num steps: {}".format(len(path)))
             return self.followPath(path)
 
     def stepPath(self, step):
@@ -158,7 +158,7 @@ class Agent():
             'z':self.controller.last_event.metadata['agent']['position']['z'],
             'yaw':self.controller.last_event.metadata['agent']['rotation']['y']
         }
-        print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
+        # print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
         # rgb = 
         # topdown_img = self.controller.last_event.third_party_camera_frames[0]
         # self.topdown_frames.append(topdown_img)
@@ -167,6 +167,6 @@ class Agent():
 
     def followPath(self, path):
         for i,step in enumerate(path):
-            print("Step: {}".format(i))
+            # print("Step: {}".format(i))
             self.stepPath(step)
         return True
