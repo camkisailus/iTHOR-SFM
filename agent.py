@@ -2,9 +2,14 @@ from navigation import Navigation
 import numpy as np
 import cv2
 from moviepy.editor import ImageSequenceClip
-from particle_filters import ObjectParticleFilter
+from particle_filters import ObjectParticleFilter, FrameParticleFilter
+from SFM import SemanticFrameMapping
 import utils
 
+class State:
+    def __init__(self, action_history=[]):
+        self.action_history = action_history
+    
 class Agent:
     def __init__(self, controller, pose):
         self.controller = controller
@@ -13,7 +18,20 @@ class Agent:
         self.idx = 0
         self.cam_idx = 0
         self.topdown_frames = []
-        self.pf = ObjectParticleFilter("Pillow", self.controller)
+        self.pillow_pf = ObjectParticleFilter("Pillow", self.controller)
+        self.grasp_pillow_pf = FrameParticleFilter(
+            "Grasp_Pillow",
+            preconditions=None,
+            core_frame_elements=["Pillow"],
+            controller=controller,
+        )
+        self.grasp_pillow_pf.addFrameElementFilter("Pillow", self.pillow_pf)
+        self.objectFilters = [self.pillow_pf]
+        self.frameFilters = [self.grasp_pillow_pf]
+        self.sfm = SemanticFrameMapping(
+            self.objectFilters, self.frameFilters, self.controller
+        )
+        self.state = State()
 
     def makeVideo(self):
         for i in range(10):
@@ -43,11 +61,13 @@ class Agent:
                 # print("Stepping Path")
                 self.stepPath(step)
                 # print("Processing RGB")
-                obj_id, reachable_poses = self.processRGB(object_name=object_name, return_poses=True)
+                obj_id, reachable_poses = self.processRGB(
+                    object_name=object_name, return_poses=True
+                )
                 # print("Updating Filter")
-                self.pf.updateFilter()
+                self.sfm.updateFilters(self.state)
                 # print("Saving Distribution")
-                self.pf.saveDistribution(fname=filter_idx)
+                self.sfm.saveDistributions()
                 filter_idx += 1
                 if reachable_poses is not None:
                     obj_found = True
@@ -61,7 +81,12 @@ class Agent:
                             "yaw": reachable_poses[i]["rotation"],
                         }
                         path = self.nav.planPath(self.cur_pose, goal)
-                        self.followPath(path)
+                        for step in path:
+                            self.stepPath(step)
+                            self.processRGB()
+                            self.sfm.updateFilters(self.state)
+                            self.sfm.saveDistributions()
+                        # self.followPath(path)
                         if self.pickup(obj_id):
                             print("Picked up object!!")
                             return True
@@ -85,11 +110,13 @@ class Agent:
         obj_dets = self.controller.last_event.instance_detections2D
         try:
             cur_robot_pose = {
-                'x': self.controller.last_event.metadata['agent']['position']['x'],
-                'z': self.controller.last_event.metadata['agent']['position']['z'],
-                'yaw': self.controller.last_event.metadata['agent']['rotation']['y']
+                "x": self.controller.last_event.metadata["agent"]["position"]["x"],
+                "z": self.controller.last_event.metadata["agent"]["position"]["z"],
+                "yaw": self.controller.last_event.metadata["agent"]["rotation"]["y"],
             }
-            object_detection_msg = {'robot_pose': cur_robot_pose} # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
+            object_detection_msg = {
+                "robot_pose": cur_robot_pose
+            }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
             for obj_id, loc in obj_dets.items():
                 # if object_name is not None and obj_id.split("|")[0] == object_name:
                 # tlx = loc[0]
@@ -119,7 +146,7 @@ class Agent:
                 # return obj_id, interactable_poses  # reachable poses of object
         except:
             pass
-        self.pf.handleObservation(object_detection_msg)
+        self.sfm.handleObservation(object_detection_msg)
         # print(object_detection_msg)
         if return_poses:
             # return poses only for object of interest
@@ -130,7 +157,6 @@ class Agent:
             # return entire detection msg
             return object_detection_msg
         return None, None
-        
 
     def goTo(self, goal):
         """
@@ -172,11 +198,18 @@ class Agent:
         }
         # print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
         # rgb =
-        print("Saving Img")
-        topdown_img = self.controller.last_event.third_party_camera_frames[0][:,:,::-1]
-        self.topdown_frames.append(topdown_img)
-        cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/{}.png".format(self.cam_idx), topdown_img)
-        self.cam_idx += 1
+        # print("Saving Img")
+        # topdown_img = self.controller.last_event.third_party_camera_frames[0][
+        #     :, :, ::-1
+        # ]
+        # self.topdown_frames.append(topdown_img)
+        # cv2.imwrite(
+        #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/{}.png".format(
+        #         self.cam_idx
+        #     ),
+        #     topdown_img,
+        # )
+        # self.cam_idx += 1
         # self.processRGB()
 
     def followPath(self, path):
