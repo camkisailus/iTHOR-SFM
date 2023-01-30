@@ -19,19 +19,28 @@ class Agent:
         self.cam_idx = 0
         self.topdown_frames = []
         self.pillow_pf = ObjectParticleFilter("Pillow", self.controller)
+        self.tomato_pf = ObjectParticleFilter("Tomato", self.controller)
         self.grasp_pillow_pf = FrameParticleFilter(
             "Grasp_Pillow",
             preconditions=None,
             core_frame_elements=["Pillow"],
             controller=controller,
         )
+        self.grasp_tomato_pf = FrameParticleFilter(
+            "Grasp_Tomato",
+            preconditions=None,
+            core_frame_elements=["Tomato"],
+            controller=self.controller
+        )
         self.grasp_pillow_pf.addFrameElementFilter("Pillow", self.pillow_pf)
-        self.objectFilters = [self.pillow_pf]
-        self.frameFilters = [self.grasp_pillow_pf]
+        self.grasp_tomato_pf.addFrameElementFilter("Tomato", self.tomato_pf)
+        self.objectFilters = [self.pillow_pf, self.tomato_pf]
+        self.frameFilters = [self.grasp_pillow_pf, self.grasp_tomato_pf]
         self.sfm = SemanticFrameMapping(
             self.objectFilters, self.frameFilters, self.controller
         )
         self.state = State()
+        self.frameElements = self.sfm.getFrameElements()
 
     def makeVideo(self):
         for i in range(10):
@@ -47,6 +56,15 @@ class Agent:
             forceAction=False,
             manualInteract=True,
         ).metadata["lastActionSuccess"]
+    
+    def slice(self, object_id):
+        print("Attempting to slice {}".format(utils.cleanObjectID(object_id)))
+        return self.controller.step(
+            action="SliceObject",
+            objectId=object_id,
+            forceAction=False
+        ).metadata["lastActionSuccess"]
+        
 
     def searchFor(self, object_name):
         # explore randomly
@@ -86,11 +104,17 @@ class Agent:
                             self.processRGB()
                             self.sfm.updateFilters(self.state)
                             self.sfm.saveDistributions()
-                        # self.followPath(path)
-                        if self.pickup(obj_id):
-                            print("Picked up object!!")
+                        if self.slice(obj_id):
+                            print("Successfully sliced the object")
+                            self.controller.step(
+                                action="Done"
+                            )
                             return True
-                        print("Failed to pickup object")
+                        # self.followPath(path)
+                        # if self.pickup(obj_id):
+                        #     print("Picked up object!!")
+                        #     return True
+                        # print("Failed to pickup object")
                         # print(obj_id
                         # for obj in self.controller.last_event.metadata['objects']:
                         #     if obj['objectId'] == obj_id:
@@ -118,6 +142,17 @@ class Agent:
                 "robot_pose": cur_robot_pose
             }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
             for obj_id, loc in obj_dets.items():
+                if utils.cleanObjectID(obj_id) in self.frameElements:
+                    # print("Observed at {}".format(utils.cleanObjectID(obj_id)))
+                    interactable_poses = self.controller.step(
+                        action="GetInteractablePoses",
+                        objectId=obj_id,
+                        rotations=[0, 90, 180, 270],
+                        horizons=[-30, 0],
+                        standings=[True],
+                    ).metadata["actionReturn"]
+                    if interactable_poses is not None:
+                        object_detection_msg[obj_id] = interactable_poses
                 # if object_name is not None and obj_id.split("|")[0] == object_name:
                 # tlx = loc[0]
                 # tly = loc[1]
@@ -133,14 +168,6 @@ class Agent:
                 # print(
                 #     "{} located at ({})".format(obj_id.split("|")[0], world_coords)
                 # )
-                interactable_poses = self.controller.step(
-                    action="GetInteractablePoses",
-                    objectId=obj_id,
-                    horizons=[0],
-                    standings=[True],
-                ).metadata["actionReturn"]
-                if interactable_poses is not None:
-                    object_detection_msg[obj_id] = interactable_poses
                 # if utils.cleanObjectID(obj_id) == object_name:
                 #     print("Interactable_poses: {}".format(interactable_poses))
                 # return obj_id, interactable_poses  # reachable poses of object
@@ -149,6 +176,7 @@ class Agent:
         self.sfm.handleObservation(object_detection_msg)
         # print(object_detection_msg)
         if return_poses:
+            # print("Returning poses!")
             # return poses only for object of interest
             for obj_id, poses in object_detection_msg.items():
                 if utils.cleanObjectID(obj_id) == object_name:

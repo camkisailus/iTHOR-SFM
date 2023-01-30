@@ -43,7 +43,7 @@ if __name__ == "__main__":
     controller = Controller(
         agentMode="default",
         visibilityDistance=1.5,
-        scene="FloorPlan212",
+        scene="FloorPlan4",
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     }
     print(agent_pose)
     ag = Agent(controller, agent_pose)
-    ag.searchFor(object_name="Pillow")
+    ag.searchFor(object_name="Tomato")
     ag.goTo(goal="random")
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
