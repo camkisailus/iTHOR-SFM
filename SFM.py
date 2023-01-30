@@ -16,14 +16,28 @@ class SemanticFrameMapping:
             print(filter)
         self.distIdx = 0
     
+    def execute(self, frame_name):
+        filter = self.frameFilters[frame_name]
+        currentBestEstimate = filter.getHighestWeightedParticle()
+        
+    
     def getFrameElements(self):
         return [label for label in self.objectFilters.keys()]
 
-    def saveDistributions(self):
-        for filter in self.objectFilters.values():
-            filter.saveDistribution(self.distIdx)
-        for filter in self.frameFilters.values():
-            filter.saveDistribution(self.distIdx)
+    def saveDistributions(self, filter_name=None):
+        if filter_name is None:
+            for filter in self.objectFilters.values():
+                filter.saveDistribution(self.distIdx)
+            for filter in self.frameFilters.values():
+                filter.saveDistribution(self.distIdx)
+        else:
+            for filter in self.objectFilters.values():
+                if filter.label in list(filter_name):
+                    filter.saveDistribution(self.distIdx)
+            for filter in self.frameFilters.values():
+                if filter.label == filter_name:
+                    print("Saving dist {}".format(self.distIdx))
+                    filter.saveDistribution(self.distIdx)
         self.distIdx += 1
 
     def displayHighestWeighted(self):
@@ -53,10 +67,12 @@ class SemanticFrameMapping:
         
 
     def updateFilters(self, state):
-        for filter in self.objectFilters.values():
-            filter.updateFilter()
-        for filter in self.frameFilters.values():
-            filter.updateFilter(state)
+        for i in range(10):
+            print("Update: {}".format(i))
+            for filter in self.objectFilters.values():
+                filter.updateFilter()
+            for filter in self.frameFilters.values():
+                filter.updateFilter(state)
 
     def handleObservation(self, observation):
         objectsSeen = []

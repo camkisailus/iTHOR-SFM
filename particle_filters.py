@@ -16,6 +16,25 @@ class ParticleFilter:
         self.weights = (1 / (self.nParticles)) * np.ones(
             (self.nParticles)
         )  # initialize weights
+        # self.particles[0,0] = 0
+        # self.particles[0,1] = 0
+        # self.particles[0,2] = 0
+
+        # self.particles[1,0] = 0
+        # self.particles[1,1] = 0
+        # self.particles[1,2] = 180
+
+        # self.particles[2,0] = 2
+        # self.particles[2,1] = 0
+        # self.particles[2,2] = 0
+
+        # self.particles[3,0] = 2
+        # self.particles[3,1] = 0
+        # self.particles[3,2] = 180
+
+        # self.particles[4,0] = 1
+        # self.particles[4,1] = 0
+        # self.particles[4,2] = 0
         idx = 0
         for pose in self.valid_poses:
             for rot in [0, 90, 180, 270]:
@@ -34,7 +53,7 @@ class ParticleFilter:
             )
 
     def getHighestWeightedParticle(self):
-        return self.particles[np.argmax(self.weights)]
+        return self.particles[np.argmax(self.weights)], self.weights[np.argmax(self.weights)]
 
     def saveDistribution(self, fname):
         cm = plt.cm.get_cmap("winter")
@@ -166,7 +185,7 @@ class FrameParticleFilter(ParticleFilter):
         for frame_elem in self.frame_element_filters.keys():
             frameElemString += "\t\t{}\n".format(frame_elem)
         string += frameElemString
-        string += "\tPreconditions:"
+        string += "\tPreconditions:\n"
         preconditionString = ""
         if self.preconditions:
             for precondtion in self.precondition_filters.keys():
@@ -218,7 +237,7 @@ class FrameParticleFilter(ParticleFilter):
         i = 0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         if self.preconditions:
-            for precondition in self.preconditons:
+            for precondition in self.preconditions:
                 if precondition not in state.action_history:
                     break
                 else:
@@ -282,25 +301,68 @@ class State:
         self.action_history = action_history
 
 if __name__ == "__main__":
-    pillow_pf = ObjectParticleFilter("Pillow", None)  # self.controller)
-    grasp_pillow_pf = FrameParticleFilter(
-        "Grasp_Pillow",
+    knife_pf = ObjectParticleFilter("Knife", None)
+    tomato_pf = ObjectParticleFilter("Tomato", None)
+    grasp_knife_pf = FrameParticleFilter(
+        "Grasp_Knife",
         preconditions=None,
-        core_frame_elements=["Pillow"],
+        core_frame_elements=["Knife"],
         controller=None,
     )
+    grasp_tomato_pf = FrameParticleFilter(
+        "Grasp_Tomato",
+        preconditions=None,
+        core_frame_elements=["Tomato"],
+        controller=None
+    )
+    slice_tomato_pf = FrameParticleFilter(
+        "Slice_Tomato",
+        preconditions=["Grasp_Knife"],
+        core_frame_elements=["Knife", "Tomato"],
+        controller=None
+    )
+    grasp_knife_pf.addFrameElementFilter("Knife", knife_pf)
+    grasp_tomato_pf.addFrameElementFilter("Tomato", tomato_pf)
+    slice_tomato_pf.addFrameElementFilter("Knife", knife_pf)
+    slice_tomato_pf.addFrameElementFilter("Tomato", tomato_pf)
+    slice_tomato_pf.addPreconditionFilter("Grasp_Knife", grasp_knife_pf)
+    filters = [knife_pf, tomato_pf, grasp_knife_pf, grasp_tomato_pf, slice_tomato_pf]
     state = State()
-    grasp_pillow_pf.addFrameElementFilter("Pillow", pillow_pf)
     print("Before Observation")
-    pillow_pf.showParticles()
-    grasp_pillow_pf.showParticles()
-    pillow_pf.addObservation([{'x':0.0, 'z':0.0, 'rotation':0.0}])
+    grasp_knife_pf.showParticles()
+    tomato_pf.showParticles()
+    slice_tomato_pf.showParticles()
+    tomato_pf.addObservation([{'x':0.0, 'z':0.0, 'rotation':0.0}])
+    tomato_pf.addObservation([{'x':2.0, 'z':0.0, 'rotation':0.0}])
+    knife_pf.addObservation([{'x':0.0, 'z':0.0, 'rotation':0.0}])
+    knife_pf.addObservation([{'x':1.0, 'z':0.0, 'rotation':0.0}])
     print("After Observation")
-    for i in range(10000):
-        pillow_pf.updateFilter()
-        grasp_pillow_pf.updateFilter(state)
-    pillow_pf.showParticles()
-    grasp_pillow_pf.showParticles()
+    for j in range(100):
+        for i, filter in enumerate(filters):
+            if i>1:
+                filter.updateFilter(state)
+            else:
+                filter.updateFilter()
+    grasp_knife_pf.showParticles()
+    tomato_pf.showParticles()
+    slice_tomato_pf.showParticles()
+    state.action_history.append("Grasp_Knife")
+    print("After state change")
+    for j in range(100):
+        for i, filter in enumerate(filters):
+            if i>1:
+                filter.updateFilter(state)
+            else:
+                filter.updateFilter()
+    grasp_knife_pf.showParticles()
+    tomato_pf.showParticles()
+    slice_tomato_pf.showParticles()
+
+    # for i in range(10000):
+    #     pillow_pf.updateFilter()
+    #     grasp_pillow_pf.updateFilter(state)
+    # pillow_pf.showParticles()
+    # grasp_pillow_pf.showParticles()
     # pillow_pf.updateFilter()
     # pillow_pf.showParticles()
     # grasp_pillow_pf.updateFilter(state)

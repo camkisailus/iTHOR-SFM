@@ -6,10 +6,12 @@ from particle_filters import ObjectParticleFilter, FrameParticleFilter
 from SFM import SemanticFrameMapping
 import utils
 
+
 class State:
     def __init__(self, action_history=[]):
         self.action_history = action_history
-    
+
+
 class Agent:
     def __init__(self, controller, pose):
         self.controller = controller
@@ -18,24 +20,37 @@ class Agent:
         self.idx = 0
         self.cam_idx = 0
         self.topdown_frames = []
-        self.pillow_pf = ObjectParticleFilter("Pillow", self.controller)
+        self.knife_pf = ObjectParticleFilter("Knife", self.controller)
         self.tomato_pf = ObjectParticleFilter("Tomato", self.controller)
-        self.grasp_pillow_pf = FrameParticleFilter(
-            "Grasp_Pillow",
+        self.grasp_knife_pf = FrameParticleFilter(
+            "Grasp_Knife",
             preconditions=None,
-            core_frame_elements=["Pillow"],
+            core_frame_elements=["Knife"],
             controller=controller,
         )
         self.grasp_tomato_pf = FrameParticleFilter(
             "Grasp_Tomato",
             preconditions=None,
             core_frame_elements=["Tomato"],
-            controller=self.controller
+            controller=self.controller,
         )
-        self.grasp_pillow_pf.addFrameElementFilter("Pillow", self.pillow_pf)
+        self.slice_tomato_pf = FrameParticleFilter(
+            "Slice_Tomato",
+            preconditions=["Grasp_Knife"],
+            core_frame_elements=["Knife", "Tomato"],
+            controller=self.controller,
+        )
+        self.grasp_knife_pf.addFrameElementFilter("Knife", self.knife_pf)
         self.grasp_tomato_pf.addFrameElementFilter("Tomato", self.tomato_pf)
-        self.objectFilters = [self.pillow_pf, self.tomato_pf]
-        self.frameFilters = [self.grasp_pillow_pf, self.grasp_tomato_pf]
+        self.slice_tomato_pf.addFrameElementFilter("Knife", self.knife_pf)
+        self.slice_tomato_pf.addFrameElementFilter("Tomato", self.tomato_pf)
+        self.slice_tomato_pf.addPreconditionFilter("Grasp_Knife", self.grasp_knife_pf)
+        self.objectFilters = [self.knife_pf, self.tomato_pf]
+        self.frameFilters = [
+            self.grasp_knife_pf,
+            self.grasp_tomato_pf,
+            self.slice_tomato_pf,
+        ]
         self.sfm = SemanticFrameMapping(
             self.objectFilters, self.frameFilters, self.controller
         )
@@ -56,15 +71,114 @@ class Agent:
             forceAction=False,
             manualInteract=True,
         ).metadata["lastActionSuccess"]
-    
+
     def slice(self, object_id):
         print("Attempting to slice {}".format(utils.cleanObjectID(object_id)))
         return self.controller.step(
-            action="SliceObject",
-            objectId=object_id,
-            forceAction=False
+            action="SliceObject", objectId=object_id, forceAction=False
         ).metadata["lastActionSuccess"]
+
+    def observeSurroundings(self):
+        self.sfm.saveDistributions()
+        for i in range(4):
+            # Quick observation of surroundings
+            self.controller.step(action="RotateRight", degrees=90)
+            self.processRGB()
+            self.saveTopDown()
+        self.sfm.updateFilters(self.state)
+        self.sfm.saveDistributions()
+
+    def execute(self, frame_name):
+        frameFilter = None        
+        for filter in self.frameFilters:
+            if filter.label == frame_name:
+                print("Grabbing highest particle from {}".format(filter.label))
+                frameFilter = filter
+                currentBestEstimate, weight = filter.getHighestWeightedParticle()
+        print(
+            "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
+                currentBestEstimate[0],
+                currentBestEstimate[1],
+                currentBestEstimate[2],
+                weight,
+            )
+        )
+        navGoal = {
+            "x": currentBestEstimate[0],
+            "z": currentBestEstimate[1],
+            "yaw": currentBestEstimate[2],
+        }
+        path = self.nav.planPath(self.cur_pose, navGoal)
+        self.followPath(path)
+        if frame_name == "Grasp_Tomato":
+            obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
+            print("Obj_id = {}".format(obj_id))
+            if self.pickup(obj_id):
+                print("Successful!!!!")
+        elif frame_name == "Grasp_Knife":
+            obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+            print("Obj_id = {}".format(obj_id))
+            if self.pickup(obj_id):
+                print("Successful!!!!")
+        elif frame_name == "Slice_Tomato":
+            obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+            print("Obj_id = {}".format(obj_id))
+            if self.pickup(obj_id):
+                print("Grasped the knife!")
+                self.state.action_history.append("Grasp_Knife")
+                print("Updated the action history")
+                self.sfm.updateFilters(self.state)
+                self.sfm.saveDistributions()
+                currentBestEstimate, weight = filter.getHighestWeightedParticle()
+                print(
+                    "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
+                        currentBestEstimate[0],
+                        currentBestEstimate[1],
+                        currentBestEstimate[2],
+                        weight,
+                    )
+                )
+                navGoal = {
+                    "x": currentBestEstimate[0],
+                    "z": currentBestEstimate[1],
+                    "yaw": currentBestEstimate[2],
+                }
+                self.followPath(self.nav.planPath(self.cur_pose, navGoal))
+                obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
+                print("Tomato obj_id = {}".format(obj_id))
+                if self.slice(obj_id):
+                    print("Successfully sliced the tomato w a knife!")
+                else:
+                    print("Slice failed")
+               
+
+
+            
+        # for step in path:
+        #     self.stepPath(step)
+        #     self.processRGB()
+        #     self.sfm.updateFilters(self.state)
+        #     self.sfm.saveDistributions(filter_name="Grasp_Tomato")
         
+            # check for new highest weight
+            # newBestEstimate, newWeight = frameFilter.getHighestWeightedParticle()
+            # if (
+            #     currentBestEstimate[0] != newBestEstimate[0]
+            #     and currentBestEstimate[1] != newBestEstimate[1]
+            #     and currentBestEstimate[2] != newBestEstimate[2]
+            # ):
+            #     print("New Best Estimate!!!!")
+            #     currentBestEstimate = newBestEstimate
+            #     weight = newWeight
+            #     print(
+            #         "currentBestEstimate: ({}, {}, {}) Weight: {}".format(
+            #             currentBestEstimate[0],
+            #             currentBestEstimate[1],
+            #             currentBestEstimate[2],
+            #             weight,
+            #         )
+            #     )
+            #     break
 
     def searchFor(self, object_name):
         # explore randomly
@@ -106,9 +220,7 @@ class Agent:
                             self.sfm.saveDistributions()
                         if self.slice(obj_id):
                             print("Successfully sliced the object")
-                            self.controller.step(
-                                action="Done"
-                            )
+                            self.controller.step(action="Done")
                             return True
                         # self.followPath(path)
                         # if self.pickup(obj_id):
@@ -141,9 +253,10 @@ class Agent:
             object_detection_msg = {
                 "robot_pose": cur_robot_pose
             }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
+            print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
                 if utils.cleanObjectID(obj_id) in self.frameElements:
-                    # print("Observed at {}".format(utils.cleanObjectID(obj_id)))
+                    print("Observed {}".format(utils.cleanObjectID(obj_id)))
                     interactable_poses = self.controller.step(
                         action="GetInteractablePoses",
                         objectId=obj_id,
@@ -224,21 +337,20 @@ class Agent:
             "z": self.controller.last_event.metadata["agent"]["position"]["z"],
             "yaw": self.controller.last_event.metadata["agent"]["rotation"]["y"],
         }
-        # print("Cur robot pose: ({}, {}, {})".format(self.cur_pose['x'], self.cur_pose['z'], self.cur_pose['yaw']))
-        # rgb =
-        # print("Saving Img")
-        # topdown_img = self.controller.last_event.third_party_camera_frames[0][
-        #     :, :, ::-1
-        # ]
-        # self.topdown_frames.append(topdown_img)
-        # cv2.imwrite(
-        #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/{}.png".format(
-        #         self.cam_idx
-        #     ),
-        #     topdown_img,
-        # )
-        # self.cam_idx += 1
-        # self.processRGB()
+        self.saveTopDown()
+    
+    def saveTopDown(self):
+        topdown_img = self.controller.last_event.third_party_camera_frames[0][
+            :, :, ::-1
+        ]
+        self.topdown_frames.append(topdown_img)
+        cv2.imwrite(
+            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/{}.png".format(
+                self.cam_idx
+            ),
+            topdown_img,
+        )
+        self.cam_idx += 1
 
     def followPath(self, path):
         for i, step in enumerate(path):

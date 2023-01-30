@@ -56,6 +56,14 @@ if __name__ == "__main__":
         height=300,
         fieldOfView=90,
     )
+    # controller.step(
+    #     action='SetObjectPoses',
+    #     objectPoses=[
+    #         {
+    #             "objectName":"Knife"
+    #         }
+    #     ]
+    # )
     # setup topdown view cam
     event = controller.step(action="GetMapViewCameraProperties")
     event = controller.step(
@@ -83,8 +91,16 @@ if __name__ == "__main__":
     }
     print(agent_pose)
     ag = Agent(controller, agent_pose)
-    ag.searchFor(object_name="Tomato")
-    ag.goTo(goal="random")
+    ag.observeSurroundings()
+    ag.execute("Grasp_Knife")
+    # ag.searchFor(object_name="Tomato")
+    # goal_pose = {
+    #     'x': -3.75,
+    #     'z':1.25,
+    #     'yaw':0.0
+    # }
+    # ag.goTo(goal=goal_pose)
+    print("Done")
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)
