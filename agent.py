@@ -3,7 +3,6 @@ import numpy as np
 import cv2
 from moviepy.editor import ImageSequenceClip
 from particle_filters import ObjectParticleFilter, FrameParticleFilter
-from SFM import SemanticFrameMapping
 import utils
 
 
@@ -13,49 +12,90 @@ class State:
 
 
 class Agent:
-    def __init__(self, controller, pose):
+    def __init__(self, controller, pose, frames, objects):
         self.controller = controller
         self.nav = Navigation(controller)
         self.cur_pose = pose
         self.idx = 0
         self.cam_idx = 0
         self.topdown_frames = []
-        self.knife_pf = ObjectParticleFilter("Knife", self.controller)
-        self.apple_pf = ObjectParticleFilter("Apple", self.controller)
-        self.grasp_knife_pf = FrameParticleFilter(
-            "Grasp_Knife",
-            preconditions=None,
-            core_frame_elements=["Knife"],
-            controller=controller,
-        )
-        self.grasp_apple_pf = FrameParticleFilter(
-            "Grasp_Apple",
-            preconditions=None,
-            core_frame_elements=["Apple"],
-            controller=self.controller,
-        )
-        self.slice_apple_pf = FrameParticleFilter(
-            "Slice_Apple",
-            preconditions=["Grasp_Knife"],
-            core_frame_elements=["Knife", "Apple"],
-            controller=self.controller,
-        )
-        self.grasp_knife_pf.addFrameElementFilter("Knife", self.knife_pf)
-        self.grasp_apple_pf.addFrameElementFilter("Apple", self.apple_pf)
-        self.slice_apple_pf.addFrameElementFilter("Knife", self.knife_pf)
-        self.slice_apple_pf.addFrameElementFilter("Apple", self.apple_pf)
-        self.slice_apple_pf.addPreconditionFilter("Grasp_Knife", self.grasp_knife_pf)
-        self.objectFilters = [self.knife_pf, self.apple_pf]
-        self.frameFilters = [
-            self.grasp_knife_pf,
-            self.grasp_apple_pf,
-            self.slice_apple_pf,
-        ]
-        self.sfm = SemanticFrameMapping(
-            self.objectFilters, self.frameFilters, self.controller
-        )
+        self.object_filters = {}
+        for object in objects:
+            self.object_filters[object] = ObjectParticleFilter(
+                object.capitalize(), self.controller
+            )
+        print("Loaded the following object filters")
+        for name, filter in self.object_filters.items():
+            print("Name: {}".format(name))
+        self.frame_filters = {}
+        for frame in frames:
+            filter = FrameParticleFilter(
+                frame.name.capitalize(),
+                preconditions=frame.preconditions,
+                core_frame_elements=frame.core_frame_elements,
+                controller=self.controller,
+            )
+            for frame_element in frame.core_frame_elements:
+                filter.addFrameElementFilter(
+                    frame_element, self.object_filters[frame_element]
+                )
+            # if frame.preconditions is not None:
+            #     for precondition in frame.preconditions:
+            #     filter.addPreconditionFilter(precondition, )
+            self.frame_filters[frame.name] = filter
+        for frame in frames:
+            if frame.preconditions is not None:
+                for precondition in frame.preconditions:
+                    self.frame_filters[frame.name].addPreconditionFilter(
+                        precondition, self.frame_filters[precondition]
+                    )
+        print("Loaded the following frame filters")
+        for filter in self.frame_filters.values():
+            print(filter)
+
+        # self = SemanticFrameMapping(
+        #     self.objectFilters, self.frameFilters, self.controller
+        # )
         self.state = State()
-        self.frameElements = self.sfm.getFrameElements()
+        self.frameElements = [label for label in self.object_filters.keys()]
+        self.observeSurroundings()
+
+    def updateFilters(self):
+        for objFilter in self.object_filters.values():
+            objFilter.updateFilter()
+        for frameFilter in self.frame_filters.values():
+            frameFilter.updateFilter(self.state)
+
+    def handleObservation(self, observation):
+        objectSeen = set()
+        for obj_id, interactablePoses in observation.items():
+            try:
+                self.object_filters[utils.cleanObjectID(obj_id)].addObservation(
+                    interactablePoses
+                )
+                objectSeen.add(utils.cleanObjectID(obj_id))
+            except KeyError:
+                pass
+        for filter in self.object_filters.values():
+            if filter.label not in objectSeen:
+                filter.addNegativePose(observation["robot_pose"])
+
+    def saveDistributions(self, filterName=None):
+        print("Saving Distributions!!!!!!!!!!!!")
+        if filterName is None:
+            for filter in self.object_filters.values():
+                filter.saveDistribution()
+            for filter in self.frame_filters.values():
+                filter.saveDistribution()
+        else:
+            try:
+                self.object_filters[filterName].saveDistribution()
+            except KeyError:
+                pass
+            try:
+                self.frame_filters[filterName].saveDistribution()
+            except KeyError:
+                pass
 
     def makeVideo(self):
         for i in range(10):
@@ -77,30 +117,31 @@ class Agent:
         return self.controller.step(
             action="SliceObject", objectId=object_id, forceAction=False
         ).metadata["lastActionSuccess"]
-    
+
     def done(self):
         self.controller.step(action="Done")
 
     def observeSurroundings(self):
-        self.sfm.saveDistributions()
+        self.saveDistributions()
         for i in range(4):
             # Quick observation of surroundings
-            self.stepPath('turn_right')
+            self.stepPath("turn_right")
             self.processRGB()
             self.saveTopDown()
-        self.sfm.updateFilters(self.state)
-        self.sfm.saveDistributions()
+        self.updateFilters()
+        self.saveDistributions()
 
     def execute(self, frame_name):
-        frameFilter = None        
-        for filter in self.frameFilters:
-            if filter.label == frame_name:
+        frameFilter = None
+        for filter in self.frame_filters.values():
+            # print(filter.label)
+            if filter.label.lower() == frame_name.lower():
                 print("Grabbing highest particle from {}".format(filter.label))
                 frameFilter = filter
                 # currentBestEstimate, weight = filter.getHighestWeightedParticle()
                 top_k = filter.getTopKWeightedParticles()
-        
-        # currentBestEstimate = top_k[0]     
+
+        # currentBestEstimate = top_k[0]
         # print(
         #     "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
         #         currentBestEstimate[0],
@@ -109,7 +150,7 @@ class Agent:
         #         weight,
         #     )
         # )
-        
+
         if frame_name == "Grasp_Tomato":
             obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
             print("Obj_id = {}".format(obj_id))
@@ -126,7 +167,11 @@ class Agent:
             while not knifeGrasped:
                 currentBestEstimate = top_k[topKIndex]
                 topKIndex += 1
-                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                navGoal = {
+                    "x": currentBestEstimate[0],
+                    "z": currentBestEstimate[1],
+                    "yaw": currentBestEstimate[2],
+                }
                 print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 self.followPath(path)
@@ -136,8 +181,8 @@ class Agent:
                     print("Grasped the knife!")
                     self.state.action_history.append("Grasp_Knife")
                     print("Updated the action history")
-                    self.sfm.updateFilters(self.state)
-                    self.sfm.saveDistributions()
+                    self.updateFilters()
+                    self.saveDistributions()
                     knifeGrasped = True
             top_k = frameFilter.getTopKWeightedParticles()
             topKIndex = 0
@@ -146,11 +191,17 @@ class Agent:
                 try:
                     currentBestEstimate = top_k[topKIndex]
                 except IndexError:
-                    print("[EXECUTION FAILED]: Unable to slice tomato with all given poses")
+                    print(
+                        "[EXECUTION FAILED]: Unable to slice tomato with all given poses"
+                    )
                     return False
                 print("Trying {} pose to slice".format(topKIndex))
                 topKIndex += 1
-                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                navGoal = {
+                    "x": currentBestEstimate[0],
+                    "z": currentBestEstimate[1],
+                    "yaw": currentBestEstimate[2],
+                }
                 print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 self.followPath(path)
@@ -169,7 +220,11 @@ class Agent:
             while not knifeGrasped:
                 currentBestEstimate = top_k[topKIndex]
                 topKIndex += 1
-                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                navGoal = {
+                    "x": currentBestEstimate[0],
+                    "z": currentBestEstimate[1],
+                    "yaw": currentBestEstimate[2],
+                }
                 print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 self.followPath(path)
@@ -179,8 +234,8 @@ class Agent:
                     print("Grasped the knife!")
                     self.state.action_history.append("Grasp_Knife")
                     print("Updated the action history")
-                    self.sfm.updateFilters(self.state)
-                    self.sfm.saveDistributions()
+                    self.updateFilters()
+                    self.saveDistributions()
                     knifeGrasped = True
             top_k = frameFilter.getTopKWeightedParticles()
             topKIndex = 0
@@ -189,11 +244,17 @@ class Agent:
                 try:
                     currentBestEstimate = top_k[topKIndex]
                 except IndexError:
-                    print("[EXECUTION FAILED]: Unable to slice apple with all given poses")
+                    print(
+                        "[EXECUTION FAILED]: Unable to slice apple with all given poses"
+                    )
                     return False
                 print("Trying {} pose to slice".format(topKIndex))
                 topKIndex += 1
-                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                navGoal = {
+                    "x": currentBestEstimate[0],
+                    "z": currentBestEstimate[1],
+                    "yaw": currentBestEstimate[2],
+                }
                 print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 self.followPath(path)
@@ -222,41 +283,38 @@ class Agent:
             #     "yaw": currentBestEstimate[2],
             # }
             # self.followPath(self.nav.planPath(self.cur_pose, navGoal))
-            
+
             # print("Tomato obj_id = {}".format(obj_id))
             # if self.slice(obj_id):
             #     print("Successfully sliced the tomato w a knife!")
             # else:
             #     print("Slice failed")
-               
 
-
-            
         # for step in path:
         #     self.stepPath(step)
         #     self.processRGB()
-        #     self.sfm.updateFilters(self.state)
-        #     self.sfm.saveDistributions(filter_name="Grasp_Tomato")
-        
-            # check for new highest weight
-            # newBestEstimate, newWeight = frameFilter.getHighestWeightedParticle()
-            # if (
-            #     currentBestEstimate[0] != newBestEstimate[0]
-            #     and currentBestEstimate[1] != newBestEstimate[1]
-            #     and currentBestEstimate[2] != newBestEstimate[2]
-            # ):
-            #     print("New Best Estimate!!!!")
-            #     currentBestEstimate = newBestEstimate
-            #     weight = newWeight
-            #     print(
-            #         "currentBestEstimate: ({}, {}, {}) Weight: {}".format(
-            #             currentBestEstimate[0],
-            #             currentBestEstimate[1],
-            #             currentBestEstimate[2],
-            #             weight,
-            #         )
-            #     )
-            #     break
+        #     self.updateFilters(self.state)
+        #     self.saveDistributions(filter_name="Grasp_Tomato")
+
+        # check for new highest weight
+        # newBestEstimate, newWeight = frameFilter.getHighestWeightedParticle()
+        # if (
+        #     currentBestEstimate[0] != newBestEstimate[0]
+        #     and currentBestEstimate[1] != newBestEstimate[1]
+        #     and currentBestEstimate[2] != newBestEstimate[2]
+        # ):
+        #     print("New Best Estimate!!!!")
+        #     currentBestEstimate = newBestEstimate
+        #     weight = newWeight
+        #     print(
+        #         "currentBestEstimate: ({}, {}, {}) Weight: {}".format(
+        #             currentBestEstimate[0],
+        #             currentBestEstimate[1],
+        #             currentBestEstimate[2],
+        #             weight,
+        #         )
+        #     )
+        #     break
 
     def searchFor(self, object_name):
         # explore randomly
@@ -275,9 +333,9 @@ class Agent:
                     object_name=object_name, return_poses=True
                 )
                 # print("Updating Filter")
-                self.sfm.updateFilters(self.state)
+                self.updateFilters()
                 # print("Saving Distribution")
-                self.sfm.saveDistributions()
+                self.saveDistributions()
                 filter_idx += 1
                 if reachable_poses is not None:
                     obj_found = True
@@ -294,8 +352,8 @@ class Agent:
                         for step in path:
                             self.stepPath(step)
                             self.processRGB()
-                            self.sfm.updateFilters(self.state)
-                            self.sfm.saveDistributions()
+                            self.updateFilters()
+                            self.saveDistributions()
                         if self.slice(obj_id):
                             print("Successfully sliced the object")
                             self.done()
@@ -346,7 +404,7 @@ class Agent:
                         object_detection_msg[obj_id] = interactable_poses
         except:
             pass
-        self.sfm.handleObservation(object_detection_msg)
+        self.handleObservation(object_detection_msg)
         # print(object_detection_msg)
         if return_poses:
             # print("Returning poses!")
@@ -397,7 +455,7 @@ class Agent:
             "yaw": self.controller.last_event.metadata["agent"]["rotation"]["y"],
         }
         self.saveTopDown()
-    
+
     def saveTopDown(self):
         topdown_img = self.controller.last_event.third_party_camera_frames[0][
             :, :, ::-1

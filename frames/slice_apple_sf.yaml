@@ -1,0 +1,12 @@
+# semantic frame
+# grasp_knife_sf.yaml 
+
+name: Slice_Apple
+description: Grasp a Knife then Slice an Apple
+frame_elements:
+  - name: Knife
+    is_core: True
+  - name: Apple
+    is_core: True
+preconditions:
+  - name: Grasp_Knife

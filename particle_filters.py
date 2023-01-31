@@ -11,7 +11,7 @@ class ParticleFilter:
             "actionReturn"
         ]
         nPoses = len(self.valid_poses)
-        self.nParticles = nPoses*4
+        self.nParticles = nPoses * 4
         self.particles = np.zeros([self.nParticles, 3])  # 4 rotations for each x,z pose
         self.weights = (1 / (self.nParticles)) * np.ones(
             (self.nParticles)
@@ -42,6 +42,7 @@ class ParticleFilter:
                 self.particles[idx, 1] = pose["z"]
                 self.particles[idx, 2] = rot
                 idx += 1
+        self.saveIdx = 0
 
     def showParticles(self):
         print("Particles in {}".format(self.label))
@@ -58,7 +59,10 @@ class ParticleFilter:
         return self.particles[idxs]
 
     def getHighestWeightedParticle(self):
-        return self.particles[np.argmax(self.weights)], self.weights[np.argmax(self.weights)]
+        return (
+            self.particles[np.argmax(self.weights)],
+            self.weights[np.argmax(self.weights)],
+        )
 
     def getTopKWeightedParticles(self, k=5):
         # print("Min weight = {}".format(np.min(self.weights)))
@@ -71,22 +75,28 @@ class ParticleFilter:
         # print("###############")
         return self.particles[ind]
 
-    def saveDistribution(self, fname):
+    def saveDistribution(self):
         cm = plt.cm.get_cmap("winter")
         fig = plt.figure()
         axs = fig.gca()
         weightMap = np.clip(self.weights / np.max(self.weights), 0, 1)
         sc = axs.scatter(
-            self.particles[:, 0], self.particles[:, 1], c=weightMap, cmap=cm, alpha=weightMap
+            self.particles[:, 0],
+            self.particles[:, 1],
+            c=weightMap,
+            cmap=cm,
+            alpha=weightMap,
         )
-        axs.set_title("{} Distribution @ step {}".format(self.label, fname))
+        axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
         fig.colorbar(sc)
         fig.savefig(
             "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/{}_{}.png".format(
-                self.label, fname
+                self.label, self.saveIdx
             )
         )
+        self.saveIdx += 1
         plt.close(fig)
+
 
 class ObjectParticleFilter(ParticleFilter):
     def __init__(self, label, controller):
@@ -147,15 +157,15 @@ class ObjectParticleFilter(ParticleFilter):
                 return 10
             else:  # particle close to interactable pose
                 linearDist = np.sqrt(
-                    (interactable_pose['x'] - particle[0]) ** 2
-                    + (interactable_pose['z'] - particle[1]) ** 2
+                    (interactable_pose["x"] - particle[0]) ** 2
+                    + (interactable_pose["z"] - particle[1]) ** 2
                 )
-                angularDist = np.abs(interactable_pose['yaw'] - particle[2]) % 360
+                angularDist = np.abs(interactable_pose["yaw"] - particle[2]) % 360
                 if angularDist > 180:
                     angularDist = 360 - angularDist
                 linearStepErr = linearDist / 0.25  # 0.25m per robot step
                 angularStepErr = angularDist / 90  # 90deg per robot step
-                phi = np.exp(-1*(linearStepErr + angularStepErr))
+                phi = np.exp(-1 * (linearStepErr + angularStepErr))
                 if phi > max_phi:
                     max_phi = phi
         return max_phi
@@ -190,7 +200,7 @@ class FrameParticleFilter(ParticleFilter):
             self.preconditions = preconditions
             self.next_precondition = preconditions[0]
         else:
-            self.preconditions = False
+            self.preconditions = None
         self.controller = controller
 
     def __str__(self):
@@ -212,9 +222,13 @@ class FrameParticleFilter(ParticleFilter):
         return string
 
     def addFrameElementFilter(self, label, filter):
+        print(
+            "Adding {} filter as frame element to {}".format(filter.label, self.label)
+        )
         self.frame_element_filters[label] = filter
 
     def addPreconditionFilter(self, label, filter):
+        print("Adding {} filter as precondition to {}".format(filter.label, self.label))
         self.precondition_filters[label] = filter
 
     def contextPotential(self, particle, state):
@@ -264,14 +278,14 @@ class FrameParticleFilter(ParticleFilter):
             coreElementFilter = self.frame_element_filters[self.frame_elements[i]]
             for j in range(coreElementFilter.nParticles):
                 otherParticle = coreElementFilter.particles[j, :]
-                if(
+                if (
                     otherParticle[0] == particle[0]
                     and otherParticle[1] == particle[1]
                     and otherParticle[2] == particle[2]
                 ):
                     potential += coreElementFilter.weights[j]
                 else:
-                    potential+=0
+                    potential += 0
                 # print("otherParticle at ({}, {}, {})".format(otherParticle[0], otherParticle[1], otherParticle[2]))
                 # print("otherParticle weight = {}".format(coreElementFilter.weights[j]))
                 # linearDist = np.sqrt(
@@ -312,9 +326,11 @@ class FrameParticleFilter(ParticleFilter):
             self.weights[i] += weight
         self.weights /= np.sum(self.weights)
 
+
 class State:
     def __init__(self, action_history=[]):
         self.action_history = action_history
+
 
 if __name__ == "__main__":
     knife_pf = ObjectParticleFilter("Knife", None)
@@ -329,13 +345,13 @@ if __name__ == "__main__":
         "Grasp_Tomato",
         preconditions=None,
         core_frame_elements=["Tomato"],
-        controller=None
+        controller=None,
     )
     slice_tomato_pf = FrameParticleFilter(
         "Slice_Tomato",
         preconditions=["Grasp_Knife"],
         core_frame_elements=["Knife", "Tomato"],
-        controller=None
+        controller=None,
     )
     grasp_knife_pf.addFrameElementFilter("Knife", knife_pf)
     grasp_tomato_pf.addFrameElementFilter("Tomato", tomato_pf)
@@ -348,14 +364,14 @@ if __name__ == "__main__":
     grasp_knife_pf.showParticles()
     tomato_pf.showParticles()
     slice_tomato_pf.showParticles()
-    tomato_pf.addObservation([{'x':0.0, 'z':0.0, 'rotation':0.0}])
-    tomato_pf.addObservation([{'x':2.0, 'z':0.0, 'rotation':0.0}])
-    knife_pf.addObservation([{'x':0.0, 'z':0.0, 'rotation':0.0}])
-    knife_pf.addObservation([{'x':1.0, 'z':0.0, 'rotation':0.0}])
+    tomato_pf.addObservation([{"x": 0.0, "z": 0.0, "rotation": 0.0}])
+    tomato_pf.addObservation([{"x": 2.0, "z": 0.0, "rotation": 0.0}])
+    knife_pf.addObservation([{"x": 0.0, "z": 0.0, "rotation": 0.0}])
+    knife_pf.addObservation([{"x": 1.0, "z": 0.0, "rotation": 0.0}])
     print("After Observation")
     for j in range(100):
         for i, filter in enumerate(filters):
-            if i>1:
+            if i > 1:
                 filter.updateFilter(state)
             else:
                 filter.updateFilter()
@@ -366,7 +382,7 @@ if __name__ == "__main__":
     print("After state change")
     for j in range(100):
         for i, filter in enumerate(filters):
-            if i>1:
+            if i > 1:
                 filter.updateFilter(state)
             else:
                 filter.updateFilter()
@@ -383,5 +399,3 @@ if __name__ == "__main__":
     # pillow_pf.showParticles()
     # grasp_pillow_pf.updateFilter(state)
     # grasp_pillow_pf.showParticles()
-
-

@@ -3,6 +3,11 @@ from navigation import Navigation
 from agent import Agent
 import matplotlib.pyplot as plt
 import random
+import argparse
+import utils
+import os
+
+ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
 def testNav(agent):
@@ -39,11 +44,19 @@ def testNav(agent):
 
 
 if __name__ == "__main__":
+    floorPlan, frames, objects, actions = utils.loadExperimentConfig(
+        os.path.join(ROOT, "experiment_configs", "exp_1.yaml")
+    )
+    # for frame in frames:
+    #     print(frame)
+    # print("#"*20)
+    # for object in objects:
+    #     print(object)
 
     controller = Controller(
         agentMode="default",
         visibilityDistance=1.5,
-        scene="FloorPlan3",
+        scene=floorPlan,
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
@@ -56,34 +69,11 @@ if __name__ == "__main__":
         height=300,
         fieldOfView=90,
     )
-    # controller.step(
-    #     action='SetObjectPoses',
-    #     objectPoses=[
-    #         {
-    #             "objectName":"Knife"
-    #         }
-    #     ]
-    # )
     # setup topdown view cam
     event = controller.step(action="GetMapViewCameraProperties")
     event = controller.step(
         action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
     )
-
-    agent_metadata = controller.last_event.metadata["agent"]
-
-    # controller.step(
-    #     action="Teleport",
-    #     position=dict(
-    #         x= -0.25,#agent_metadata["position"]["x"],
-    #         y= 0, #agent_metadata["position"]["y"],
-    #         z=1.25 #agent_metadata["position"]["z"],
-    #     ),
-    #     rotation=dict(x=0, y=270, z=0),
-    #     horizon=30,
-    #     standing=True,
-    # )
-    # {'x': -0.25, 'z': 1.25, 'yaw': 270.0}
     agent_metadata = controller.last_event.metadata["agent"]
     agent_pose = {
         "x": agent_metadata["position"]["x"],
@@ -91,21 +81,14 @@ if __name__ == "__main__":
         "yaw": agent_metadata["rotation"]["y"],
     }
     print(agent_pose)
-    ag = Agent(controller, agent_pose)
-    ag.observeSurroundings()
-    ag.execute("Slice_Apple")
-    # ag.searchFor(object_name="Tomato")
-    # goal_pose = {
-    #     'x': -3.75,
-    #     'z':1.25,
-    #     'yaw':0.0
-    # }
-    # ag.goTo(goal=goal_pose)
-    print("Done")
+    ag = Agent(controller, agent_pose, frames, objects)
+    for action in actions:
+        print("Executing {}".format(action))
+        ag.execute(action)
+    # print("Done")
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)
+    exit()
     while True:
         pass
-
-    exit()

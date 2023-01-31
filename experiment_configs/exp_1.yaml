@@ -1,0 +1,7 @@
+floor_plan: FloorPlan2
+frames: 
+  - name: Grasp_Knife
+  - name: Slice_Tomato
+  - name: Slice_Apple
+execute: 
+  - name: Slice_Apple
