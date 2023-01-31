@@ -21,35 +21,35 @@ class Agent:
         self.cam_idx = 0
         self.topdown_frames = []
         self.knife_pf = ObjectParticleFilter("Knife", self.controller)
-        self.tomato_pf = ObjectParticleFilter("Tomato", self.controller)
+        self.apple_pf = ObjectParticleFilter("Apple", self.controller)
         self.grasp_knife_pf = FrameParticleFilter(
             "Grasp_Knife",
             preconditions=None,
             core_frame_elements=["Knife"],
             controller=controller,
         )
-        self.grasp_tomato_pf = FrameParticleFilter(
-            "Grasp_Tomato",
+        self.grasp_apple_pf = FrameParticleFilter(
+            "Grasp_Apple",
             preconditions=None,
-            core_frame_elements=["Tomato"],
+            core_frame_elements=["Apple"],
             controller=self.controller,
         )
-        self.slice_tomato_pf = FrameParticleFilter(
-            "Slice_Tomato",
+        self.slice_apple_pf = FrameParticleFilter(
+            "Slice_Apple",
             preconditions=["Grasp_Knife"],
-            core_frame_elements=["Knife", "Tomato"],
+            core_frame_elements=["Knife", "Apple"],
             controller=self.controller,
         )
         self.grasp_knife_pf.addFrameElementFilter("Knife", self.knife_pf)
-        self.grasp_tomato_pf.addFrameElementFilter("Tomato", self.tomato_pf)
-        self.slice_tomato_pf.addFrameElementFilter("Knife", self.knife_pf)
-        self.slice_tomato_pf.addFrameElementFilter("Tomato", self.tomato_pf)
-        self.slice_tomato_pf.addPreconditionFilter("Grasp_Knife", self.grasp_knife_pf)
-        self.objectFilters = [self.knife_pf, self.tomato_pf]
+        self.grasp_apple_pf.addFrameElementFilter("Apple", self.apple_pf)
+        self.slice_apple_pf.addFrameElementFilter("Knife", self.knife_pf)
+        self.slice_apple_pf.addFrameElementFilter("Apple", self.apple_pf)
+        self.slice_apple_pf.addPreconditionFilter("Grasp_Knife", self.grasp_knife_pf)
+        self.objectFilters = [self.knife_pf, self.apple_pf]
         self.frameFilters = [
             self.grasp_knife_pf,
-            self.grasp_tomato_pf,
-            self.slice_tomato_pf,
+            self.grasp_apple_pf,
+            self.slice_apple_pf,
         ]
         self.sfm = SemanticFrameMapping(
             self.objectFilters, self.frameFilters, self.controller
@@ -160,6 +160,49 @@ class Agent:
                 else:
                     if self.slice(obj_id):
                         print("Successfully sliced tomato with a knife")
+                        return True
+                    else:
+                        print("Slice Failed")
+        elif frame_name == "Slice_Apple":
+            knifeGrasped = False
+            topKIndex = 0
+            while not knifeGrasped:
+                currentBestEstimate = top_k[topKIndex]
+                topKIndex += 1
+                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                print("navGoal is {}".format(navGoal))
+                path = self.nav.planPath(self.cur_pose, navGoal)
+                self.followPath(path)
+                obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+                print("Obj_id = {}".format(obj_id))
+                if self.pickup(obj_id):
+                    print("Grasped the knife!")
+                    self.state.action_history.append("Grasp_Knife")
+                    print("Updated the action history")
+                    self.sfm.updateFilters(self.state)
+                    self.sfm.saveDistributions()
+                    knifeGrasped = True
+            top_k = frameFilter.getTopKWeightedParticles()
+            topKIndex = 0
+            appleSliced = False
+            while not appleSliced:
+                try:
+                    currentBestEstimate = top_k[topKIndex]
+                except IndexError:
+                    print("[EXECUTION FAILED]: Unable to slice apple with all given poses")
+                    return False
+                print("Trying {} pose to slice".format(topKIndex))
+                topKIndex += 1
+                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                print("navGoal is {}".format(navGoal))
+                path = self.nav.planPath(self.cur_pose, navGoal)
+                self.followPath(path)
+                obj_id, _ = self.processRGB(object_name="Apple", return_poses=True)
+                if obj_id is None:
+                    pass
+                else:
+                    if self.slice(obj_id):
+                        print("Successfully sliced apple with a knife")
                         return True
                     else:
                         print("Slice Failed")

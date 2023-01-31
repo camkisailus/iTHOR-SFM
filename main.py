@@ -43,7 +43,7 @@ if __name__ == "__main__":
     controller = Controller(
         agentMode="default",
         visibilityDistance=1.5,
-        scene="FloorPlan4",
+        scene="FloorPlan3",
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     print(agent_pose)
     ag = Agent(controller, agent_pose)
     ag.observeSurroundings()
-    ag.execute("Slice_Tomato")
+    ag.execute("Slice_Apple")
     # ag.searchFor(object_name="Tomato")
     # goal_pose = {
     #     'x': -3.75,
