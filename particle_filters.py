@@ -52,8 +52,24 @@ class ParticleFilter:
                 )
             )
 
+    def getMaxWeightParticles(self):
+        maxWeight = np.max(self.weights)
+        idxs = np.argwhere(self.weights == maxWeight)
+        return self.particles[idxs]
+
     def getHighestWeightedParticle(self):
         return self.particles[np.argmax(self.weights)], self.weights[np.argmax(self.weights)]
+
+    def getTopKWeightedParticles(self, k=5):
+        # print("Min weight = {}".format(np.min(self.weights)))
+        # print("Max weight = {}".format(np.max(self.weights)))
+        # print("Getting top {} particles from {} filter".format(k, self.label))
+        ind = np.argpartition(self.weights, -k)[-k:]
+        ind = ind[np.argsort(self.weights[ind])]
+        # for i in ind:
+        #     print(self.weights[i])
+        # print("###############")
+        return self.particles[ind]
 
     def saveDistribution(self, fname):
         cm = plt.cm.get_cmap("winter")

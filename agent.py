@@ -77,12 +77,15 @@ class Agent:
         return self.controller.step(
             action="SliceObject", objectId=object_id, forceAction=False
         ).metadata["lastActionSuccess"]
+    
+    def done(self):
+        self.controller.step(action="Done")
 
     def observeSurroundings(self):
         self.sfm.saveDistributions()
         for i in range(4):
             # Quick observation of surroundings
-            self.controller.step(action="RotateRight", degrees=90)
+            self.stepPath('turn_right')
             self.processRGB()
             self.saveTopDown()
         self.sfm.updateFilters(self.state)
@@ -94,22 +97,19 @@ class Agent:
             if filter.label == frame_name:
                 print("Grabbing highest particle from {}".format(filter.label))
                 frameFilter = filter
-                currentBestEstimate, weight = filter.getHighestWeightedParticle()
-        print(
-            "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
-                currentBestEstimate[0],
-                currentBestEstimate[1],
-                currentBestEstimate[2],
-                weight,
-            )
-        )
-        navGoal = {
-            "x": currentBestEstimate[0],
-            "z": currentBestEstimate[1],
-            "yaw": currentBestEstimate[2],
-        }
-        path = self.nav.planPath(self.cur_pose, navGoal)
-        self.followPath(path)
+                # currentBestEstimate, weight = filter.getHighestWeightedParticle()
+                top_k = filter.getTopKWeightedParticles()
+        
+        # currentBestEstimate = top_k[0]     
+        # print(
+        #     "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
+        #         currentBestEstimate[0],
+        #         currentBestEstimate[1],
+        #         currentBestEstimate[2],
+        #         weight,
+        #     )
+        # )
+        
         if frame_name == "Grasp_Tomato":
             obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
             print("Obj_id = {}".format(obj_id))
@@ -121,35 +121,70 @@ class Agent:
             if self.pickup(obj_id):
                 print("Successful!!!!")
         elif frame_name == "Slice_Tomato":
-            obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
-            print("Obj_id = {}".format(obj_id))
-            if self.pickup(obj_id):
-                print("Grasped the knife!")
-                self.state.action_history.append("Grasp_Knife")
-                print("Updated the action history")
-                self.sfm.updateFilters(self.state)
-                self.sfm.saveDistributions()
-                currentBestEstimate, weight = filter.getHighestWeightedParticle()
-                print(
-                    "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
-                        currentBestEstimate[0],
-                        currentBestEstimate[1],
-                        currentBestEstimate[2],
-                        weight,
-                    )
-                )
-                navGoal = {
-                    "x": currentBestEstimate[0],
-                    "z": currentBestEstimate[1],
-                    "yaw": currentBestEstimate[2],
-                }
-                self.followPath(self.nav.planPath(self.cur_pose, navGoal))
+            knifeGrasped = False
+            topKIndex = 0
+            while not knifeGrasped:
+                currentBestEstimate = top_k[topKIndex]
+                topKIndex += 1
+                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                print("navGoal is {}".format(navGoal))
+                path = self.nav.planPath(self.cur_pose, navGoal)
+                self.followPath(path)
+                obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+                print("Obj_id = {}".format(obj_id))
+                if self.pickup(obj_id):
+                    print("Grasped the knife!")
+                    self.state.action_history.append("Grasp_Knife")
+                    print("Updated the action history")
+                    self.sfm.updateFilters(self.state)
+                    self.sfm.saveDistributions()
+                    knifeGrasped = True
+            top_k = frameFilter.getTopKWeightedParticles()
+            topKIndex = 0
+            tomatoSliced = False
+            while not tomatoSliced:
+                try:
+                    currentBestEstimate = top_k[topKIndex]
+                except IndexError:
+                    print("[EXECUTION FAILED]: Unable to slice tomato with all given poses")
+                    return False
+                print("Trying {} pose to slice".format(topKIndex))
+                topKIndex += 1
+                navGoal = {'x':currentBestEstimate[0], 'z':currentBestEstimate[1], 'yaw':currentBestEstimate[2]}
+                print("navGoal is {}".format(navGoal))
+                path = self.nav.planPath(self.cur_pose, navGoal)
+                self.followPath(path)
                 obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
-                print("Tomato obj_id = {}".format(obj_id))
-                if self.slice(obj_id):
-                    print("Successfully sliced the tomato w a knife!")
+                if obj_id is None:
+                    pass
                 else:
-                    print("Slice failed")
+                    if self.slice(obj_id):
+                        print("Successfully sliced tomato with a knife")
+                        return True
+                    else:
+                        print("Slice Failed")
+
+            # currentBestEstimate, weight = filter.getHighestWeightedParticle()
+            # print(
+            #     "currentBestEstimate: ({}, {}, {}) Weight: ({})".format(
+            #         currentBestEstimate[0],
+            #         currentBestEstimate[1],
+            #         currentBestEstimate[2],
+            #         weight,
+            #     )
+            # )
+            # navGoal = {
+            #     "x": currentBestEstimate[0],
+            #     "z": currentBestEstimate[1],
+            #     "yaw": currentBestEstimate[2],
+            # }
+            # self.followPath(self.nav.planPath(self.cur_pose, navGoal))
+            
+            # print("Tomato obj_id = {}".format(obj_id))
+            # if self.slice(obj_id):
+            #     print("Successfully sliced the tomato w a knife!")
+            # else:
+            #     print("Slice failed")
                
 
 
@@ -220,7 +255,7 @@ class Agent:
                             self.sfm.saveDistributions()
                         if self.slice(obj_id):
                             print("Successfully sliced the object")
-                            self.controller.step(action="Done")
+                            self.done()
                             return True
                         # self.followPath(path)
                         # if self.pickup(obj_id):
@@ -253,10 +288,10 @@ class Agent:
             object_detection_msg = {
                 "robot_pose": cur_robot_pose
             }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
-            print("Looking for {}".format(self.frameElements))
+            # print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
                 if utils.cleanObjectID(obj_id) in self.frameElements:
-                    print("Observed {}".format(utils.cleanObjectID(obj_id)))
+                    # print("Observed {}".format(utils.cleanObjectID(obj_id)))
                     interactable_poses = self.controller.step(
                         action="GetInteractablePoses",
                         objectId=obj_id,
@@ -266,24 +301,6 @@ class Agent:
                     ).metadata["actionReturn"]
                     if interactable_poses is not None:
                         object_detection_msg[obj_id] = interactable_poses
-                # if object_name is not None and obj_id.split("|")[0] == object_name:
-                # tlx = loc[0]
-                # tly = loc[1]
-                # brx = loc[2]
-                # bry = loc[3]
-                # bbox_center = (int((tlx + brx) / 2), int((tly + bry) / 2))
-                # query = self.controller.step(
-                #     action="GetCoordinateFromRaycast",
-                #     x=bbox_center[0] / 300,
-                #     y=bbox_center[1] / 300,
-                # )
-                # world_coords = query.metadata["actionReturn"]
-                # print(
-                #     "{} located at ({})".format(obj_id.split("|")[0], world_coords)
-                # )
-                # if utils.cleanObjectID(obj_id) == object_name:
-                #     print("Interactable_poses: {}".format(interactable_poses))
-                # return obj_id, interactable_poses  # reachable poses of object
         except:
             pass
         self.sfm.handleObservation(object_detection_msg)
@@ -315,7 +332,6 @@ class Agent:
             return self.followPath(path)
         else:
             path = self.nav.navTo(self.cur_pose, goal)
-            # print("Num steps: {}".format(len(path)))
             return self.followPath(path)
 
     def stepPath(self, step):
@@ -327,10 +343,10 @@ class Agent:
             # print("Stepping Backward")
             self.controller.step(action="MoveBack", moveMagnitude=0.25)
         elif step == "turn_right":
-            # print("Stepping Right")
+            # print("Turning Right")
             self.controller.step(action="RotateRight", degrees=90)
         elif step == "turn_left":
-            # print("Stepping Left")
+            # print("Turning Left")
             self.controller.step(action="RotateLeft", degrees=90)
         self.cur_pose = {
             "x": self.controller.last_event.metadata["agent"]["position"]["x"],

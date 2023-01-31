@@ -68,7 +68,7 @@ class SemanticFrameMapping:
 
     def updateFilters(self, state):
         for i in range(10):
-            print("Update: {}".format(i))
+            # print("Update: {}".format(i))
             for filter in self.objectFilters.values():
                 filter.updateFilter()
             for filter in self.frameFilters.values():

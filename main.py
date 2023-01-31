@@ -72,17 +72,18 @@ if __name__ == "__main__":
 
     agent_metadata = controller.last_event.metadata["agent"]
 
-    controller.step(
-        action="Teleport",
-        position=dict(
-            x=agent_metadata["position"]["x"],
-            y=agent_metadata["position"]["y"],
-            z=agent_metadata["position"]["z"],
-        ),
-        rotation=dict(x=0, y=270, z=0),
-        horizon=30,
-        standing=True,
-    )
+    # controller.step(
+    #     action="Teleport",
+    #     position=dict(
+    #         x= -0.25,#agent_metadata["position"]["x"],
+    #         y= 0, #agent_metadata["position"]["y"],
+    #         z=1.25 #agent_metadata["position"]["z"],
+    #     ),
+    #     rotation=dict(x=0, y=270, z=0),
+    #     horizon=30,
+    #     standing=True,
+    # )
+    # {'x': -0.25, 'z': 1.25, 'yaw': 270.0}
     agent_metadata = controller.last_event.metadata["agent"]
     agent_pose = {
         "x": agent_metadata["position"]["x"],
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     print(agent_pose)
     ag = Agent(controller, agent_pose)
     ag.observeSurroundings()
-    ag.execute("Grasp_Knife")
+    ag.execute("Slice_Tomato")
     # ag.searchFor(object_name="Tomato")
     # goal_pose = {
     #     'x': -3.75,
