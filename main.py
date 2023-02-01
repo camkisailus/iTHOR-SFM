@@ -1,4 +1,5 @@
 from ai2thor.controller import Controller
+# from ai2thor.platform import CloudRendering
 from navigation import Navigation
 from agent import Agent
 import matplotlib.pyplot as plt
@@ -9,6 +10,23 @@ import os
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
 
+
+
+def testObsv(agent):
+    agent.saveDistributions()
+    # agent.processRGB()
+    # agent.updateFilters()
+    # agent.saveDistributions()
+    # valid_rotations = [0, 90, 180, 270]
+    goal = {
+            "x": -1,
+            "z": 3,
+            "yaw": 90,
+        }
+    agent.goTo(goal)
+    agent.processRGB()
+    agent.updateFilters()
+    agent.saveDistributions()
 
 def testNav(agent):
     reachable_poses = controller.step(action="GetReachablePositions").metadata[
@@ -68,6 +86,7 @@ if __name__ == "__main__":
         width=300,
         height=300,
         fieldOfView=90,
+        # platform=CloudRendering
     )
     # setup topdown view cam
     event = controller.step(action="GetMapViewCameraProperties")
@@ -82,10 +101,11 @@ if __name__ == "__main__":
     }
     print(agent_pose)
     ag = Agent(controller, agent_pose, frames, objects)
-    for action in actions:
-        print("Executing {}".format(action))
-        ag.execute(action)
-    # print("Done")
+    testObsv(ag)
+    # for action in actions:
+    #     print("Executing {}".format(action))
+    #     ag.execute(action)
+    # # print("Done")
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)

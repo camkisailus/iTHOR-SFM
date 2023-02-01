@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import utils
-
+from navigation import Node
 
 class ParticleFilter:
     def __init__(self, label, controller):
@@ -43,6 +43,11 @@ class ParticleFilter:
                 self.particles[idx, 2] = rot
                 idx += 1
         self.saveIdx = 0
+
+        self.negative_regions = []
+
+    def add_negative_region(self, region):
+        self.negative_regions.append(region)    
 
     def showParticles(self):
         print("Particles in {}".format(self.label))
@@ -90,7 +95,7 @@ class ParticleFilter:
         axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
         fig.colorbar(sc)
         fig.savefig(
-            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/{}_{}.png".format(
+            "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(
                 self.label, self.saveIdx
             )
         )
@@ -133,8 +138,43 @@ class ObjectParticleFilter(ParticleFilter):
             robot_pose = observation_msg["robot_pose"]
             visibility = 1.5  # m
             fov = 90  # degrees
-            if robot_pose not in self.negative_poses:
-                self.negative_poses.append(robot_pose)
+
+            # if robot_forward_x = current_x + 0.25, i =+1
+            # if robot_forward_z = current_z + 0.25, i =+1
+            #     then for current+0.25 unitl current+1.5
+            #         add to negative regions
+
+            # if robot_forward_x = current_x - 0.25, i =+1
+            # if robot_forward_z = current_z - 0.25, i =+1
+            #     then for current-0.25 unitl current-1.5
+            #         add to negative regions
+
+
+            #Object i*0.25 <= 1.5 the add it to negative reogion 
+
+
+    def check_point_in_fov(self, region, xp, yp): #x1, y1 is robot position, considering rotation switch x1, y1
+
+        x1 = region[0]
+        y1 = region[1]
+
+        #left vertex
+        x2 = region[2]
+        y2 = region[3]
+        #right vertex
+        x3 = region[4]
+        y3 = region[5]
+
+        #perform tests
+        t1 = (x2-x1)*(yp-y1)-(y2-y1)*(xp-x1)
+        t2 = (x3-x2)*(yp-y2)-(y3-y2)*(xp-x2)
+        t3 = (x1-x3)*(yp-y3)-(y1-y3)*(xp-x3)
+        
+        if (t1<0 and t2<0 and t3<0) or (t1>0 and t2>0 and t3>0):
+            return True
+        else:
+            return False
+
 
     def assignWeight(self, particle):
         # for region in self.negative_regions:
@@ -142,6 +182,14 @@ class ObjectParticleFilter(ParticleFilter):
         #     if min_x <= particle[0] <= max_x and min_z <= particle[1] <= max_z:
         #         return 0.0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
+        for region in self.negative_regions:
+            print(region)
+            if self.check_point_in_fov(region, particle[0], particle[1]):
+                print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
+                return 0.0
+        print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
+
+
         for pose in self.negative_poses:
             if particle[0] == pose["x"] and particle[1] == pose["z"]:
                 # print("Negative Pose")
