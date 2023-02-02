@@ -1,7 +1,7 @@
 floor_plan: FloorPlan6
 frames: 
   - name: Grasp_Knife
-  - name: Slice_Tomato
-  - name: Slice_Apple
+  # - name: Slice_Tomato
+  # - name: Slice_Apple
 execute: 
   - name: Slice_Tomato

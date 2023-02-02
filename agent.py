@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from particle_filters import ObjectParticleFilter, FrameParticleFilter
 import utils
+import math
 import os
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
@@ -57,13 +58,53 @@ class Agent:
 
         self.state = State()
         self.frameElements = [label for label in self.object_filters.keys()]
-        self.observeSurroundings()
+        # self.observeSurroundings()
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
             objFilter.updateFilter()
         for frameFilter in self.frame_filters.values():
             frameFilter.updateFilter(self.state)
+
+    # def check_point_in_fov(self, x1, y1, xp, yp, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
+
+    #     angle = fov/2
+    #     range_x = visibility_dist/math.cos(2*angle*math.pi/360)
+
+    #     #left vertex
+    #     x2 = x1 - range_x
+    #     y2 = y1 + visibility_dist
+
+    #     #right vertex
+    #     x3 = x1 + range_x
+    #     y3 = y1 + visibility_dist
+
+    #     #perform tests
+    #     t1 = (x2-x1)*(yp-y1)-(y2-y1)*(xp-x1)
+    #     t2 = (x3-x2)*(yp-y2)-(y3-y2)*(xp-x2)
+    #     t3 = (x1-x3)*(yp-y3)-(y1-y3)*(xp-x3)
+        
+    #     if (t1<0 and t2<0 and t3<0) or (t1>0 and t2>0 and t3>0):
+    #         return True
+    #     else:
+    #         return False
+
+    def make_region(self, x1, y1, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
+
+        angle = fov/2
+        range_x = visibility_dist/math.cos(2*angle*math.pi/360)
+
+        #left vertex
+        x2 = x1 - range_x
+        y2 = y1 + visibility_dist
+
+        #right vertex
+        x3 = x1 + range_x
+        y3 = y1 + visibility_dist
+
+        return [x1, y1, x2, y2, x3, y3]
+
+
 
     def handleObservation(self, observation):
         objectSeen = set()
@@ -78,6 +119,58 @@ class Agent:
         for filter in self.object_filters.values():
             if filter.label not in objectSeen:
                 filter.addNegativePose(observation["robot_pose"])
+
+            # +z is up, +x is right, 0degrees = +z, 90degrees = +x, 180degrees = -z, 270degrees = -x 
+                visibility_dist = 1.5
+                fov = 90
+                angle = fov/2
+                range1 = visibility_dist/math.cos(2*angle*math.pi/360)
+
+                robot_cur_pos = observation["robot_pose"]
+                # interactablePoses = observation[filter.label]
+                # interactablePoses_in_view = []
+                
+                if robot_cur_pos["yaw"] == 0:
+                    # for inter_pose in  interactablePoses:
+                    #     if (robot_cur_pos["z"] <= inter_pose[1] <= robot_cur_pos["z"] + visibility_dist) and (inter_pose[0] - range1 <= inter_pose[0] <= inter_pose[0] + range1):
+                    #         if self.check_point_in_fov(robot_cur_pos["x"], robot_cur_pos["z"], inter_pose[0], inter_pose[1], fov, visibility_dist):
+                    #             interactablePoses_in_view.append(inter_pose)
+                    triangle_region = self.make_region(robot_cur_pos["x"], robot_cur_pos["z"], fov, visibility_dist)
+                    filter.add_negative_region(triangle_region)
+
+                elif robot_cur_pos["yaw"] == 180:
+                    # for inter_pose in  interactablePoses:
+                    #     if (robot_cur_pos["z"] - visibility_dist <= inter_pose[1] <= robot_cur_pos["z"]) and (inter_pose[0] - range1 <= inter_pose[0] <= inter_pose[0] + range1):
+                    #         if self.check_point_in_fov(robot_cur_pos["x"], robot_cur_pos["z"], inter_pose[0], inter_pose[1], fov, -1*visibility_dist):
+                    #             interactablePoses_in_view.append(inter_pose)     
+                    triangle_region = self.make_region(robot_cur_pos["x"], robot_cur_pos["z"], fov, -1*visibility_dist)
+                    filter.add_negative_region(triangle_region)
+
+                elif robot_cur_pos["yaw"] == 90:
+                    # for inter_pose in  interactablePoses:
+                    #     if (robot_cur_pos["x"] <= inter_pose[0] <= robot_cur_pos["x"] + visibility_dist) and (inter_pose[1] - range1 <= inter_pose[1] <= inter_pose[1] + range1):
+                    #         if self.check_point_in_fov(robot_cur_pos["z"], robot_cur_pos["x"], inter_pose[0], inter_pose[1], fov, visibility_dist):
+                    #             interactablePoses_in_view.append(inter_pose)
+                    triangle_region = self.make_region(robot_cur_pos["z"], robot_cur_pos["x"], fov, visibility_dist)
+                    triangle_region = [triangle_region[1], triangle_region[0], triangle_region[3], triangle_region[2], triangle_region[5], triangle_region[4]]
+                    filter.add_negative_region(triangle_region)            
+
+                elif robot_cur_pos["yaw"] == 270:
+                    # for inter_pose in  interactablePoses:
+                    #     if (robot_cur_pos["x"] - visibility_dist <= inter_pose[0] <= robot_cur_pos["x"]) and (inter_pose[1] - range1 <= inter_pose[1] <= inter_pose[1] + range1):
+                    #         if self.check_point_in_fov(robot_cur_pos["z"], robot_cur_pos["x"], inter_pose[0], inter_pose[1], fov, -1*visibility_dist):
+                    #             interactablePoses_in_view.append(inter_pose)
+                    triangle_region = self.make_region(robot_cur_pos["z"], robot_cur_pos["x"], fov, -1*visibility_dist)
+                    triangle_region = [triangle_region[1], triangle_region[0], triangle_region[3], triangle_region[2], triangle_region[5], triangle_region[4]]
+                    filter.add_negative_region(triangle_region)                        
+                                
+                
+                # for ip_in_view in interactablePoses_in_view():
+                #     filter.addNegativePose(ip_in_view)
+                            
+
+                         
+                    
 
     def saveDistributions(self, filterName=None):
         # print("Saving Distributions!!!!!!!!!!!!")
@@ -423,7 +516,7 @@ class Agent:
             # print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
                 if utils.cleanObjectID(obj_id) in self.frameElements:
-                    # print("Observed {}".format(utils.cleanObjectID(obj_id)))
+                    print("Observed {}".format(utils.cleanObjectID(obj_id)))
                     interactable_poses = self.controller.step(
                         action="GetInteractablePoses",
                         objectId=obj_id,
@@ -431,8 +524,8 @@ class Agent:
                         horizons=[0],
                         standings=[True],
                     ).metadata["actionReturn"]
-                    if interactable_poses is not None:
-                        object_detection_msg[obj_id] = interactable_poses
+                    # if interactable_poses is not None:
+                    #     object_detection_msg[obj_id] = interactable_poses
         except:
             pass
         self.handleObservation(object_detection_msg)

@@ -1,4 +1,5 @@
 from ai2thor.controller import Controller
+# from ai2thor.platform import CloudRendering
 from navigation import Navigation
 from agent import Agent
 import matplotlib.pyplot as plt
@@ -20,6 +21,23 @@ BAD_SCENES = [
     "FloorPlan323",
 ]
 
+
+
+def testObsv(agent):
+    agent.saveDistributions()
+    # agent.processRGB()
+    # agent.updateFilters()
+    # agent.saveDistributions()
+    # valid_rotations = [0, 90, 180, 270]
+    goal = {
+            "x": -1,
+            "z": 3,
+            "yaw": 90,
+        }
+    agent.goTo(goal)
+    agent.processRGB()
+    agent.updateFilters()
+    agent.saveDistributions()
 
 def testNav(agent):
     """
@@ -86,6 +104,7 @@ if __name__ == "__main__":
         width=300,
         height=300,
         fieldOfView=90,
+        # platform=CloudRendering
     )
     # kitchens = controller.ithor_scenes(
     #     include_kitchens=True,
@@ -111,6 +130,13 @@ if __name__ == "__main__":
         "z": agent_metadata["position"]["z"],
         "yaw": round(agent_metadata["rotation"]["y"]),
     }
+    # print(agent_pose)
+    # ag = Agent(controller, agent_pose, frames, objects)
+    # testObsv(ag)
+    # # for action in actions:
+    # #     print("Executing {}".format(action))
+    #     ag.execute(action)
+    # # print("Done")
     controller.step(
         action="Teleport",
         position=dict(
