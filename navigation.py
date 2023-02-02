@@ -123,6 +123,12 @@ class Node:
                 position=[self.x, self.z - 0.25],
                 rotation=180.0,
             )
+        else:
+            raise ValueError(
+                "Current Node cannot be expanded. ({}, {}, {})".format(
+                    self.x, self.z, self.rotation
+                )
+            )
         return [forward_node, backward_node, right_node, left_node]
 
     def __eq__(self, other):

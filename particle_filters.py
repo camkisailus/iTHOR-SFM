@@ -80,7 +80,7 @@ class ParticleFilter:
         # print("###############")
         return self.particles[ind]
 
-    def saveDistribution(self):
+    def saveDistribution(self, trial_name):
         cm = plt.cm.get_cmap("winter")
         fig = plt.figure()
         axs = fig.gca()
@@ -97,6 +97,8 @@ class ParticleFilter:
         fig.savefig(
             "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(
                 self.label, self.saveIdx
+            # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+            #     trial_name, self.label, self.saveIdx
             )
         )
         self.saveIdx += 1
@@ -270,13 +272,13 @@ class FrameParticleFilter(ParticleFilter):
         return string
 
     def addFrameElementFilter(self, label, filter):
-        print(
-            "Adding {} filter as frame element to {}".format(filter.label, self.label)
-        )
+        # print(
+        #     "Adding {} filter as frame element to {}".format(filter.label, self.label)
+        # )
         self.frame_element_filters[label] = filter
 
     def addPreconditionFilter(self, label, filter):
-        print("Adding {} filter as precondition to {}".format(filter.label, self.label))
+        # print("Adding {} filter as precondition to {}".format(filter.label, self.label))
         self.precondition_filters[label] = filter
 
     def contextPotential(self, particle, state):
