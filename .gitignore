@@ -1,3 +1,6 @@
 __pycache__/
+.vscode/
 top_down/
+distributions/
+*.txt
 *.mp4

@@ -1,0 +1,8 @@
+# semantic frame
+# grasp_knife_sf.yaml 
+
+name: Grasp_Knife
+description: Grasp a Knife
+frame_elements:
+  - name: Knife
+    is_core: True
