@@ -99,6 +99,7 @@ class ParticleFilter:
                 self.label, self.saveIdx
             # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
             #     trial_name, self.label, self.saveIdx
+    
             )
         )
         self.saveIdx += 1
