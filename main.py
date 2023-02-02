@@ -142,7 +142,6 @@ if __name__ == "__main__":
     # print("Overall success rate: {}".format(suc_rate))
     # print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
     exit()
-
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)
