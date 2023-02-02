@@ -75,7 +75,7 @@ class ParticleFilter:
         # print("###############")
         return self.particles[ind]
 
-    def saveDistribution(self):
+    def saveDistribution(self, trial_name):
         cm = plt.cm.get_cmap("winter")
         fig = plt.figure()
         axs = fig.gca()
@@ -90,8 +90,8 @@ class ParticleFilter:
         axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
         fig.colorbar(sc)
         fig.savefig(
-            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/{}_{}.png".format(
-                self.label, self.saveIdx
+            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+                trial_name, self.label, self.saveIdx
             )
         )
         self.saveIdx += 1
@@ -115,26 +115,6 @@ class ObjectParticleFilter(ParticleFilter):
 
     def addNegativePose(self, pose):
         self.negative_poses.append(pose)
-
-    def handleObservation(self, observation_msg):
-        observed_obj = False
-        for obj_id, interactable_poses in observation_msg.items():
-            if utils.cleanObjectID(obj_id) == self.label:
-                # print("Adding interactable poses to filter")
-                observed_obj = True
-                # Detected object
-                for pose in interactable_poses:
-                    self.observations.append(
-                        {"x": pose["x"], "z": pose["z"], "yaw": pose["rotation"]}
-                    )
-        if not observed_obj:
-            # Add negative region around robot
-            # print("Adding negative robot pose ({}, {})".format(observation_msg['robot_pose']['x'], observation_msg['robot_pose']['z']))
-            robot_pose = observation_msg["robot_pose"]
-            visibility = 1.5  # m
-            fov = 90  # degrees
-            if robot_pose not in self.negative_poses:
-                self.negative_poses.append(robot_pose)
 
     def assignWeight(self, particle):
         # for region in self.negative_regions:
@@ -222,13 +202,13 @@ class FrameParticleFilter(ParticleFilter):
         return string
 
     def addFrameElementFilter(self, label, filter):
-        print(
-            "Adding {} filter as frame element to {}".format(filter.label, self.label)
-        )
+        # print(
+        #     "Adding {} filter as frame element to {}".format(filter.label, self.label)
+        # )
         self.frame_element_filters[label] = filter
 
     def addPreconditionFilter(self, label, filter):
-        print("Adding {} filter as precondition to {}".format(filter.label, self.label))
+        # print("Adding {} filter as precondition to {}".format(filter.label, self.label))
         self.precondition_filters[label] = filter
 
     def contextPotential(self, particle, state):
