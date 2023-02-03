@@ -10,8 +10,9 @@ class ParticleFilter:
         self.valid_poses = controller.step(action="GetReachablePositions").metadata[
             "actionReturn"
         ]
+        # print("[FILTERS]: {} nValidPoses: {}".format(self.label, len(self.valid_poses)))
         nPoses = len(self.valid_poses)
-        self.nParticles = nPoses #* 4
+        self.nParticles = nPoses * 4
         self.particles = np.zeros([self.nParticles, 3])  # 4 rotations for each x,z pose
         self.weights = (1 / (self.nParticles)) * np.ones(
             (self.nParticles)
@@ -37,13 +38,13 @@ class ParticleFilter:
         # self.particles[4,2] = 0
         idx = 0
         for pose in self.valid_poses:
-            #for rot in [0, 90, 180, 270]:
-            self.particles[idx, 0] = pose["x"]
-            self.particles[idx, 1] = pose["z"]
-            self.particles[idx, 2] = 90.0#rot
-            idx += 1
+            for rot in [0, 90, 180, 270]:
+                self.particles[idx, 0] = pose["x"]
+                self.particles[idx, 1] = pose["z"]
+                self.particles[idx, 2] = rot
+                idx += 1
+        # print("[FILTER]: idx = {}".format(idx))
         self.saveIdx = 0
-
         self.negative_regions = []
 
     def add_negative_region(self, region):
@@ -82,7 +83,7 @@ class ParticleFilter:
 
     def saveDistribution(self, trial_name):
         cm = plt.cm.get_cmap("winter")
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10,10))
         axs = fig.gca()
         weightMap = np.clip(self.weights / np.max(self.weights), 0, 1)
         sc = axs.scatter(
@@ -93,6 +94,11 @@ class ParticleFilter:
             alpha=weightMap,
         )
         axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
+        axs.set_xlabel("X")
+        axs.set_xticks(np.arange(min(self.particles[:,0])-0.5, max(self.particles[:,0])+0.5, 0.5))
+        axs.set_yticks(np.arange(min(self.particles[:,1])-0.5, max(self.particles[:,1])+0.5, 0.25))
+        axs.set_ylabel("Z")
+        axs.grid()
         fig.colorbar(sc)
         fig.savefig(
             "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
@@ -230,7 +236,7 @@ class ObjectParticleFilter(ParticleFilter):
         return max_phi
 
     def updateFilter(self, state):
-        print("Cur robot yaw: {}".format(state.robot_cur_pose['yaw']))
+        # print("Cur robot yaw: {}".format(state.robot_cur_pose['yaw']))
         for i, particle in enumerate(self.particles):
             weight = self.assignWeight(particle, state)
             self.weights[i] += weight
@@ -343,7 +349,7 @@ class FrameParticleFilter(ParticleFilter):
                     and otherParticle[1] == particle[1]
                     and otherParticle[2] == particle[2]
                 ):
-                    potential += coreElementFilter.weights[j]
+                    potential += (1/coreElementWeightModifier**2)*coreElementFilter.weights[j]
                 else:
                     potential += 0
                 # print("otherParticle at ({}, {}, {})".format(otherParticle[0], otherParticle[1], otherParticle[2]))

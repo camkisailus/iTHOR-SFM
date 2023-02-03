@@ -100,7 +100,7 @@ if __name__ == "__main__":
     controller = Controller(
         agentMode="default",
         visibilityDistance=1.5,
-        scene="FloorPlan27_physics",
+        scene="FloorPlan2_physics",
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
@@ -137,11 +137,11 @@ if __name__ == "__main__":
     # random.shuffle(kitchens)
     success = 0
     total = 0
-    # kitchen_scene = "FloorPlan27_physics"
+    kitchen_scene = "FloorPlan2_physics"
     # for i, kitchen_scene in enumerate(kitchens):
-        # print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
-        # controller.reset(scene=kitchen_scene)
-        # setup topdown view cam
+    print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
+    # controller.reset(scene=kitchen_scene)
+    # setup topdown view cam
     event = controller.step(action="GetMapViewCameraProperties")
     event = controller.step(
         action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
@@ -167,20 +167,20 @@ if __name__ == "__main__":
         rotation=dict(x=0, y=agent_pose["yaw"], z=0),
     )
     # try:
-    ag = Agent(controller, agent_pose, frames, objects, trial_name="testObsv", mode='sfm')
+    ag = Agent(controller, agent_pose, frames, objects, trial_name="fp2_test2", mode='sfm')
     # suc, tot = testNav(ag)
     # success+= suc
     # total += tot
     # continue
-    testObsv(ag)
-    # for action in actions:
-    #     print("[DRIVER]: Executing {}".format(action))
-    #     suc = ag.execute(action)
-    # if suc:
-    #     success += 1
-    #     print("[DRIVER]: Success")
-    # else:
-    #     print("[DRIVER]: Failure")
+    # testObsv(ag)
+    for action in actions:
+        print("[DRIVER]: Executing {}".format(action))
+        suc = ag.execute(action)
+    if suc:
+        success += 1
+        print("[DRIVER]: Success")
+    else:
+        print("[DRIVER]: Failure")
     # break
     # except Exception as e:
     #     print("[ERROR]: {}...Floorplan was {}".format(e, kitchen_scene))

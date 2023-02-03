@@ -83,37 +83,17 @@ class Agent:
             for frameElement, poses in self.oracle.items():
                 print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
         self.retries = 5
-        # if self.mode == 'sfm':
-        #     self.observeSurroundings()
+        if self.mode == 'sfm':
+            print("[AGENT]: Saving initial particle distributions")
+            self.saveDistributions()
+            # exit()
+            self.observeSurroundings()
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
             objFilter.updateFilter(self.state)
         for frameFilter in self.frame_filters.values():
             frameFilter.updateFilter(self.state)
-
-    # def check_point_in_fov(self, x1, y1, xp, yp, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
-
-    #     angle = fov/2
-    #     range_x = visibility_dist/math.cos(2*angle*math.pi/360)
-
-    #     #left vertex
-    #     x2 = x1 - range_x
-    #     y2 = y1 + visibility_dist
-
-    #     #right vertex
-    #     x3 = x1 + range_x
-    #     y3 = y1 + visibility_dist
-
-    #     #perform tests
-    #     t1 = (x2-x1)*(yp-y1)-(y2-y1)*(xp-x1)
-    #     t2 = (x3-x2)*(yp-y2)-(y3-y2)*(xp-x2)
-    #     t3 = (x1-x3)*(yp-y3)-(y1-y3)*(xp-x3)
-        
-    #     if (t1<0 and t2<0 and t3<0) or (t1>0 and t2>0 and t3>0):
-    #         return True
-    #     else:
-    #         return False
 
     def make_region(self, x1, y1, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
 
@@ -129,8 +109,6 @@ class Agent:
         y3 = y1 + visibility_dist
 
         return [x1, y1, x2, y2, x3, y3]
-
-
 
     def handleObservation(self, observation):
         objectSeen = set()
@@ -199,7 +177,8 @@ class Agent:
                     
 
     def saveDistributions(self, filterName=None):
-        print("Saving Distributions!!!!!!!!!!!!")
+        return
+        # print("Saving Distributions!!!!!!!!!!!!")
         if filterName is None:
             for filter in self.object_filters.values():
                 filter.saveDistribution(self.trial_name)
@@ -240,6 +219,7 @@ class Agent:
         self.controller.step(action="Done")
 
     def observeSurroundings(self):
+        print("[AGENT]: Observing the surroundings")
         self.saveDistributions()
         for i in range(4):
             # Quick observation of surroundings
@@ -358,7 +338,7 @@ class Agent:
                     "z": currentBestEstimate[1],
                     "yaw": currentBestEstimate[2],
                 }
-                # print("navGoal is {}".format(navGoal))
+                print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 for step in path:
                     self.stepPath(step)
@@ -628,7 +608,7 @@ class Agent:
             for obj_id, loc in obj_dets.items():
                 for frameElement in self.frameElements:
                     if frameElement in utils.cleanObjectID(obj_id):# in self.frameElements:
-                        print("Observed {}".format(obj_id))
+                        # print("Observed {}".format(obj_id))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj_id,
@@ -671,7 +651,7 @@ class Agent:
             path = self.nav.planPath(self.cur_pose, goal)
         self.followPath(path)
         # check we reached goal
-        assert((self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']))
+        # assert((self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']))
         if not (self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']):
             return False
         return True
