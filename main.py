@@ -91,6 +91,7 @@ if __name__ == "__main__":
     floorPlan, frames, objects, actions = utils.loadExperimentConfig(
         os.path.join(ROOT, "experiment_configs", "exp_1.yaml")
     )
+    scene = "FloorPlan1_physics"
     # for frame in frames:
     #     print(frame)
     # print("#"*20)
@@ -99,8 +100,8 @@ if __name__ == "__main__":
 
     controller = Controller(
         agentMode="default",
-        visibilityDistance=1.5,
-        scene="FloorPlan3_physics",
+        visibilityDistance=1.0,
+        scene=scene,
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
@@ -128,18 +129,18 @@ if __name__ == "__main__":
     #     elif "Knife" == obj['objectType']:
     #         print("Knife is located at ({}, {})".format(obj['position']['x'], obj['position']['z']))
     # exit()
-    kitchens = controller.ithor_scenes(
-        include_kitchens=True,
-        include_living_rooms=False,
-        include_bedrooms=False,
-        include_bathrooms=False
-    )
+    # kitchens = controller.ithor_scenes(
+    #     include_kitchens=True,
+    #     include_living_rooms=False,
+    #     include_bedrooms=False,
+    #     include_bathrooms=False
+    # )
     # random.shuffle(kitchens)
     success = 0
     total = 0
-    kitchen_scene = "FloorPlan2_physics"
+    # kitchen_scene = "FloorPlan2_physics"
     # for i, kitchen_scene in enumerate(kitchens):
-    print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
+    print("[DRIVER]: Starting Trial with FloorPlan {}".format(scene))
     # controller.reset(scene=kitchen_scene)
     # setup topdown view cam
     event = controller.step(action="GetMapViewCameraProperties")
@@ -167,7 +168,8 @@ if __name__ == "__main__":
         rotation=dict(x=0, y=agent_pose["yaw"], z=0),
     )
     # try:
-    ag = Agent(controller, agent_pose, frames, objects, trial_name="fp2_test2", mode='sfm')
+    # ag = Agent(controller, agent_pose, frames, objects, trial_name="{}_oracle".format(scene), mode='oracle')
+    ag = Agent(controller, agent_pose, frames, objects, trial_name="vis_1_{}".format(scene), mode='sfm')
     # suc, tot = testNav(ag)
     # success+= suc
     # total += tot
@@ -181,21 +183,11 @@ if __name__ == "__main__":
         print("[DRIVER]: Success")
     else:
         print("[DRIVER]: Failure")
-    # break
-    # except Exception as e:
-    #     print("[ERROR]: {}...Floorplan was {}".format(e, kitchen_scene))
-    #     suc = False
-
-    # if suc:
-    #     print("Trial {}/{}: PASS".format(i, len(kitchens)))
-    #     success += 1
-    # else:
-    #     print("Trial {}/{}: FAIL".format(i, len(kitchens)))
-    print("Success: {}".format(success))
+    # print("Success: {}".format(success))
     # print("Total: {}".format(total))
     # suc_rate = (success/total)*100
     # print("Overall success rate: {}".format(suc_rate))
-    print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
+    # print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
     exit()
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
