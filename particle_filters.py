@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import utils
 from navigation import Node
+import math
 
 class ParticleFilter:
     def __init__(self, label, controller):
@@ -203,7 +204,8 @@ class ObjectParticleFilter(ParticleFilter):
             # print(region)
             if self.check_point_in_fov(region, particle[0], particle[1]) and (particle[2] == state.robot_cur_pose["yaw"]):
                 # print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
-                return 0.0
+                dist = math.sqrt((particle[0]-state.robot_cur_pose["x"])**2 + (particle[2]-state.robot_cur_pose["z"])**2)
+                return -math.exp(-5*dist)
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
 
 
