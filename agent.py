@@ -17,6 +17,7 @@ class State:
 class Agent:
     def __init__(self, controller, pose, frames, objects, trial_name, mode):
         self.trial_name = trial_name
+        self.mode = mode
         if mode == 'sfm':
             os.mkdir(os.path.join(ROOT, "top_down", "trial_{}".format(trial_name)))
             os.mkdir(os.path.join(ROOT, "distributions", "trial_{}".format(trial_name)))
@@ -79,16 +80,15 @@ class Agent:
                             self.oracle[frameElement].append(interactable_poses)
                         except KeyError:
                             self.oracle[frameElement] = interactable_poses
-
-        for frameElement, poses in self.oracle.items():
-            print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
+            for frameElement, poses in self.oracle.items():
+                print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
         self.retries = 5
-        if self.mode == 'sfm':
-            self.observeSurroundings()
+        # if self.mode == 'sfm':
+        #     self.observeSurroundings()
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
-            objFilter.updateFilter()
+            objFilter.updateFilter(self.state)
         for frameFilter in self.frame_filters.values():
             frameFilter.updateFilter(self.state)
 
@@ -199,7 +199,7 @@ class Agent:
                     
 
     def saveDistributions(self, filterName=None):
-        # print("Saving Distributions!!!!!!!!!!!!")
+        print("Saving Distributions!!!!!!!!!!!!")
         if filterName is None:
             for filter in self.object_filters.values():
                 filter.saveDistribution(self.trial_name)
@@ -628,7 +628,7 @@ class Agent:
             for obj_id, loc in obj_dets.items():
                 for frameElement in self.frameElements:
                     if frameElement in utils.cleanObjectID(obj_id):# in self.frameElements:
-                        # print("Observed {}".format(obj_id))
+                        print("Observed {}".format(obj_id))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj_id,
@@ -671,6 +671,7 @@ class Agent:
             path = self.nav.planPath(self.cur_pose, goal)
         self.followPath(path)
         # check we reached goal
+        assert((self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']))
         if not (self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']):
             return False
         return True

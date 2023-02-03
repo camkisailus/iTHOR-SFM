@@ -24,6 +24,7 @@ BAD_SCENES = [
 
 
 def testObsv(agent):
+    print("Saving Initial Poses")
     agent.saveDistributions()
     # agent.processRGB()
     # agent.updateFilters()
@@ -35,10 +36,14 @@ def testObsv(agent):
     #         "yaw": 90,
     #     }
     goal = agent.nav.getRandomValidPose()
+    goal['yaw'] = 0.0
     print("Goal: {}".format(goal))
     agent.goTo(goal)
+    print("Processing RGB")
     agent.processRGB()
+    print("Updating filters")
     agent.updateFilters()
+    print("Saving Final Distributions")
     agent.saveDistributions()
     
 
@@ -133,50 +138,50 @@ if __name__ == "__main__":
     success = 0
     total = 0
     # kitchen_scene = "FloorPlan27_physics"
-    for i, kitchen_scene in enumerate(kitchens):
-        print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
-        controller.reset(scene=kitchen_scene)
+    # for i, kitchen_scene in enumerate(kitchens):
+        # print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
+        # controller.reset(scene=kitchen_scene)
         # setup topdown view cam
-        event = controller.step(action="GetMapViewCameraProperties")
-        event = controller.step(
-            action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
-        )
-        agent_metadata = controller.last_event.metadata["agent"]
-        agent_pose = {
-            "x": agent_metadata["position"]["x"],
-            "z": agent_metadata["position"]["z"],
-            "yaw": round(agent_metadata["rotation"]["y"]),
-        }
-        # print(agent_pose)
-        # ag = Agent(controller, agent_pose, frames, objects)
-        # testObsv(ag)
-        # # for action in actions:
-        # #     print("Executing {}".format(action))
-        #     ag.execute(action)
-        # # print("Done")
-        controller.step(
-            action="Teleport",
-            position=dict(
-                x=agent_pose["x"], y=agent_metadata["position"]["y"], z=agent_pose["z"]
-            ),
-            rotation=dict(x=0, y=agent_pose["yaw"], z=0),
-        )
-        # try:
-        ag = Agent(controller, agent_pose, frames, objects, trial_name="oracle_{}".format(i), mode='oracle')
-        # suc, tot = testNav(ag)
-        # success+= suc
-        # total += tot
-        # continue
-        # testObsv(ag)
-        for action in actions:
-            print("[DRIVER]: Executing {}".format(action))
-            suc = ag.execute(action)
-        if suc:
-            success += 1
-            print("[DRIVER]: Success")
-        else:
-            print("[DRIVER]: Failure")
-        break
+    event = controller.step(action="GetMapViewCameraProperties")
+    event = controller.step(
+        action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
+    )
+    agent_metadata = controller.last_event.metadata["agent"]
+    agent_pose = {
+        "x": agent_metadata["position"]["x"],
+        "z": agent_metadata["position"]["z"],
+        "yaw": round(agent_metadata["rotation"]["y"]),
+    }
+    # print(agent_pose)
+    # ag = Agent(controller, agent_pose, frames, objects)
+    # testObsv(ag)
+    # # for action in actions:
+    # #     print("Executing {}".format(action))
+    #     ag.execute(action)
+    # # print("Done")
+    controller.step(
+        action="Teleport",
+        position=dict(
+            x=agent_pose["x"], y=agent_metadata["position"]["y"], z=agent_pose["z"]
+        ),
+        rotation=dict(x=0, y=agent_pose["yaw"], z=0),
+    )
+    # try:
+    ag = Agent(controller, agent_pose, frames, objects, trial_name="testObsv", mode='sfm')
+    # suc, tot = testNav(ag)
+    # success+= suc
+    # total += tot
+    # continue
+    testObsv(ag)
+    # for action in actions:
+    #     print("[DRIVER]: Executing {}".format(action))
+    #     suc = ag.execute(action)
+    # if suc:
+    #     success += 1
+    #     print("[DRIVER]: Success")
+    # else:
+    #     print("[DRIVER]: Failure")
+    # break
     # except Exception as e:
     #     print("[ERROR]: {}...Floorplan was {}".format(e, kitchen_scene))
     #     suc = False

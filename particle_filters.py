@@ -11,7 +11,7 @@ class ParticleFilter:
             "actionReturn"
         ]
         nPoses = len(self.valid_poses)
-        self.nParticles = nPoses * 4
+        self.nParticles = nPoses #* 4
         self.particles = np.zeros([self.nParticles, 3])  # 4 rotations for each x,z pose
         self.weights = (1 / (self.nParticles)) * np.ones(
             (self.nParticles)
@@ -37,11 +37,11 @@ class ParticleFilter:
         # self.particles[4,2] = 0
         idx = 0
         for pose in self.valid_poses:
-            for rot in [0, 90, 180, 270]:
-                self.particles[idx, 0] = pose["x"]
-                self.particles[idx, 1] = pose["z"]
-                self.particles[idx, 2] = rot
-                idx += 1
+            #for rot in [0, 90, 180, 270]:
+            self.particles[idx, 0] = pose["x"]
+            self.particles[idx, 1] = pose["z"]
+            self.particles[idx, 2] = 90.0#rot
+            idx += 1
         self.saveIdx = 0
 
         self.negative_regions = []
@@ -202,7 +202,7 @@ class ObjectParticleFilter(ParticleFilter):
 
 
         for pose in self.negative_poses:
-            if particle[0] == pose["x"] and particle[1] == pose["z"]:
+            if particle[0] == pose["x"] and particle[1] == pose["z"] and particle[2] == pose['yaw']:
                 # print("Negative Pose")
                 return 0.0
         max_phi = -1e9
@@ -230,6 +230,7 @@ class ObjectParticleFilter(ParticleFilter):
         return max_phi
 
     def updateFilter(self, state):
+        print("Cur robot yaw: {}".format(state.robot_cur_pose['yaw']))
         for i, particle in enumerate(self.particles):
             weight = self.assignWeight(particle, state)
             self.weights[i] += weight
