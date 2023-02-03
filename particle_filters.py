@@ -95,13 +95,21 @@ class ParticleFilter:
         axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
         fig.colorbar(sc)
         fig.savefig(
-            "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(
-                self.label, self.saveIdx
+            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+                trial_name, self.label, self.saveIdx
             # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
             #     trial_name, self.label, self.saveIdx
     
             )
         )
+        # fig.savefig(
+        #     "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(
+        #         self.label, self.saveIdx
+        #     # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+        #     #     trial_name, self.label, self.saveIdx
+    
+        #     )
+        # )
         self.saveIdx += 1
         plt.close(fig)
 
@@ -186,11 +194,11 @@ class ObjectParticleFilter(ParticleFilter):
         #         return 0.0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         for region in self.negative_regions:
-            print(region)
+            # print(region)
             if self.check_point_in_fov(region, particle[0], particle[1]):
-                print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
+                # print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
                 return 0.0
-        print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
+        # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
 
 
         for pose in self.negative_poses:

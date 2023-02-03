@@ -29,15 +29,18 @@ def testObsv(agent):
     # agent.updateFilters()
     # agent.saveDistributions()
     # valid_rotations = [0, 90, 180, 270]
-    goal = {
-            "x": -1,
-            "z": 3,
-            "yaw": 90,
-        }
+    # goal = {
+    #         "x": -1,
+    #         "z": 3,
+    #         "yaw": 90,
+    #     }
+    goal = agent.nav.getRandomValidPose()
+    print("Goal: {}".format(goal))
     agent.goTo(goal)
     agent.processRGB()
     agent.updateFilters()
     agent.saveDistributions()
+    
 
 def testNav(agent):
     """
@@ -98,7 +101,7 @@ if __name__ == "__main__":
         snapToGrid=True,
         rotateStepDegrees=90,
         # image modalities
-        renderDepthImage=True,
+        renderDepthImage=False,
         renderInstanceSegmentation=True,
         # camera properties
         width=300,
@@ -106,53 +109,74 @@ if __name__ == "__main__":
         fieldOfView=90,
         # platform=CloudRendering
     )
-    # kitchens = controller.ithor_scenes(
-    #     include_kitchens=True,
-    #     include_living_rooms=False,
-    #     include_bedrooms=False,
-    #     include_bathrooms=False
-    # )
+    # for obj in controller.last_event.metadata["objects"]:
+    #     if "Tomato" in obj['objectType']:
+    #         print(obj['objectId'])
+    #         print(controller.step(
+    #                         action="GetInteractablePoses",
+    #                         objectId=obj['objectId'],
+    #                         rotations=[0, 90, 180, 270],
+    #                         horizons=[0],
+    #                         standings=[True],
+    #                     ).metadata["actionReturn"])
+    #         print("Tomato is located at ({}, {})".format(obj['position']['x'], obj['position']['z']))
+    #     elif "Knife" == obj['objectType']:
+    #         print("Knife is located at ({}, {})".format(obj['position']['x'], obj['position']['z']))
+    # exit()
+    kitchens = controller.ithor_scenes(
+        include_kitchens=True,
+        include_living_rooms=False,
+        include_bedrooms=False,
+        include_bathrooms=False
+    )
     # random.shuffle(kitchens)
     success = 0
     total = 0
-    kitchen_scene = "FloorPlan27_physics"
-    # for i, kitchen_scene in enumerate(kitchens):
-    print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
-    # controller.reset(scene=kitchen_scene)
-    # setup topdown view cam
-    event = controller.step(action="GetMapViewCameraProperties")
-    event = controller.step(
-        action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
-    )
-    agent_metadata = controller.last_event.metadata["agent"]
-    agent_pose = {
-        "x": agent_metadata["position"]["x"],
-        "z": agent_metadata["position"]["z"],
-        "yaw": round(agent_metadata["rotation"]["y"]),
-    }
-    # print(agent_pose)
-    # ag = Agent(controller, agent_pose, frames, objects)
-    # testObsv(ag)
-    # # for action in actions:
-    # #     print("Executing {}".format(action))
-    #     ag.execute(action)
-    # # print("Done")
-    controller.step(
-        action="Teleport",
-        position=dict(
-            x=agent_pose["x"], y=agent_metadata["position"]["y"], z=agent_pose["z"]
-        ),
-        rotation=dict(x=0, y=agent_pose["yaw"], z=0),
-    )
-    # try:
-    ag = Agent(controller, agent_pose, frames, objects, trial_name="foobar")
-    # suc, tot = testNav(ag)
-    # success+= suc
-    # total += tot
-    # continue
-    for action in actions:
-        print("Executing {}".format(action))
-        suc = ag.execute(action)
+    # kitchen_scene = "FloorPlan27_physics"
+    for i, kitchen_scene in enumerate(kitchens):
+        print("[DRIVER]: Starting Trial with FloorPlan {}".format(kitchen_scene))
+        controller.reset(scene=kitchen_scene)
+        # setup topdown view cam
+        event = controller.step(action="GetMapViewCameraProperties")
+        event = controller.step(
+            action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
+        )
+        agent_metadata = controller.last_event.metadata["agent"]
+        agent_pose = {
+            "x": agent_metadata["position"]["x"],
+            "z": agent_metadata["position"]["z"],
+            "yaw": round(agent_metadata["rotation"]["y"]),
+        }
+        # print(agent_pose)
+        # ag = Agent(controller, agent_pose, frames, objects)
+        # testObsv(ag)
+        # # for action in actions:
+        # #     print("Executing {}".format(action))
+        #     ag.execute(action)
+        # # print("Done")
+        controller.step(
+            action="Teleport",
+            position=dict(
+                x=agent_pose["x"], y=agent_metadata["position"]["y"], z=agent_pose["z"]
+            ),
+            rotation=dict(x=0, y=agent_pose["yaw"], z=0),
+        )
+        # try:
+        ag = Agent(controller, agent_pose, frames, objects, trial_name="oracle_{}".format(i), mode='oracle')
+        # suc, tot = testNav(ag)
+        # success+= suc
+        # total += tot
+        # continue
+        # testObsv(ag)
+        for action in actions:
+            print("[DRIVER]: Executing {}".format(action))
+            suc = ag.execute(action)
+        if suc:
+            success += 1
+            print("[DRIVER]: Success")
+        else:
+            print("[DRIVER]: Failure")
+        # break
     # except Exception as e:
     #     print("[ERROR]: {}...Floorplan was {}".format(e, kitchen_scene))
     #     suc = False
@@ -162,11 +186,11 @@ if __name__ == "__main__":
     #     success += 1
     # else:
     #     print("Trial {}/{}: FAIL".format(i, len(kitchens)))
-    # print("Success: {}".format(success))
+    print("Success: {}".format(success))
     # print("Total: {}".format(total))
     # suc_rate = (success/total)*100
     # print("Overall success rate: {}".format(suc_rate))
-    # print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
+    print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
     exit()
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()

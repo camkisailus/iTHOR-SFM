@@ -15,10 +15,11 @@ class State:
 
 
 class Agent:
-    def __init__(self, controller, pose, frames, objects, trial_name):
+    def __init__(self, controller, pose, frames, objects, trial_name, mode):
         self.trial_name = trial_name
-        os.mkdir(os.path.join(ROOT, "top_down", "trial_{}".format(trial_name)))
-        os.mkdir(os.path.join(ROOT, "distributions", "trial_{}".format(trial_name)))
+        if mode == 'sfm':
+            os.mkdir(os.path.join(ROOT, "top_down", "trial_{}".format(trial_name)))
+            os.mkdir(os.path.join(ROOT, "distributions", "trial_{}".format(trial_name)))
         self.controller = controller
         self.nav = Navigation(controller)
         self.cur_pose = pose
@@ -58,7 +59,27 @@ class Agent:
 
         self.state = State()
         self.frameElements = [label for label in self.object_filters.keys()]
-        # self.observeSurroundings()
+        if mode == 'oracle':
+            self.oracle = {}
+            self.mode = 'oracle'
+            # Has a map of all obj_ids to interactable poses
+            for obj in controller.last_event.metadata["objects"]:
+                for frameElement in self.frameElements:
+                    if frameElement in obj['objectType']:
+                        interactable_poses = self.controller.step(
+                            action="GetInteractablePoses",
+                            objectId=obj['objectId'],
+                            rotations=[0, 90, 180, 270],
+                            horizons=[0],
+                            standings=[True],
+                        ).metadata["actionReturn"]
+                        self.oracle[frameElement] = interactable_poses
+
+        for frameElement, poses in self.oracle.items():
+            print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
+        self.retries = 5
+        if self.mode == 'sfm':
+            self.observeSurroundings()
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
@@ -190,6 +211,7 @@ class Agent:
                 pass
 
     def pickup(self, object_id):
+
         event = self.controller.step(
             action="PickupObject",
             objectId=object_id,
@@ -199,7 +221,8 @@ class Agent:
         if event.metadata["lastActionSuccess"]:
             return True
         else:
-            print(event)
+            # print(object_id)
+            # print(event)
             return False
 
     def slice(self, object_id):
@@ -221,7 +244,72 @@ class Agent:
         self.updateFilters()
         self.saveDistributions()
 
+    def oracle_execute(self, frame_name):
+        print("[AGENT]: Running Oracle Execution")
+        if frame_name == 'Slice_Tomato':
+            poses = self.oracle['Knife']
+            i = 0
+            knifeGrasped = False
+            while i < self.retries:
+                try:
+                    pose = poses[i]
+                except IndexError:
+                    # out of possible poses
+                    return False
+                goal = {'x':pose['x'], 'z':pose['z'], 'yaw': pose['rotation']}
+                suc = self.goTo(goal)
+                if not suc:
+                    poses.pop(i)
+                    continue
+                else:
+                    i += 1
+                obj_id = self.processRGB(object_name="Knife")
+                print("[AGENT]: Obj id: {}".format(obj_id))
+                if self.pickup(obj_id):
+                    print("[AGENT]: Grasped the knife!")
+                    knifeGrasped = True
+                    break
+                else:
+                    print(["[AGENT]: Failed to Grasp Knife"])
+                    
+            if not knifeGrasped:
+                print("[AGENT]: Failed to grasp knife after {} retries".format(self.retries))
+                return False
+            tomatoSliced = False
+            poses = self.oracle['Tomato']
+            i = 0
+            while i < self.retries:
+                try:
+                    pose = poses[i]
+                except IndexError:
+                    return False
+                goal = {'x':pose['x'], 'z':pose['z'], 'yaw': pose['rotation']}
+                suc = self.goTo(goal)
+                if not suc:
+                    poses.pop(i)
+                    continue
+                else:
+                    i += 1
+
+                obj_id = self.processRGB(object_name="Tomato")
+                print("[AGENT]: Obj id: {}".format(obj_id))
+                if self.slice(obj_id):
+                    print("[AGENT]: Sliced tomato!")
+                    tomatoSliced = True
+                    break
+                else:
+                    print("[AGENT]: Failed to slice tomato")
+            if not tomatoSliced:
+                print("[AGENT]: Failed to slice tomato after {} retries".format(self.retries))
+                return False
+            else:
+                return True
+
+            
+            
     def execute(self, frame_name):
+        if self.mode == 'oracle':
+            return self.oracle_execute(frame_name)
         frameFilter = None
         for filter in self.frame_filters.values():
             # print(filter.label)
@@ -243,22 +331,23 @@ class Agent:
         # )
 
         if frame_name == "Grasp_Tomato":
-            obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
+            obj_id = self.processRGB(object_name="Tomato")
             print("Obj_id = {}".format(obj_id))
             if self.pickup(obj_id):
                 print("Successful!!!!")
         elif frame_name == "Grasp_Knife":
-            obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+            obj_id = self.processRGB(object_name="Knife")
             print("Obj_id = {}".format(obj_id))
             if self.pickup(obj_id):
                 print("Successful!!!!")
         elif frame_name == "Slice_Tomato":
             knifeGrasped = False
-            topKIndex = 0
-            while not knifeGrasped:
-                currentBestEstimate = top_k[topKIndex][0]
-                print("curBestEst: {}".format(currentBestEstimate))
-                topKIndex += 1
+            # topKIndex = 0
+            attempts = 0
+            while not knifeGrasped and attempts < self.retries:
+                currentBestEstimate = top_k[0][0]
+                # print("curBestEst: {}".format(currentBestEstimate))
+                # topKIndex += 1
                 navGoal = {
                     "x": currentBestEstimate[0],
                     "z": currentBestEstimate[1],
@@ -270,7 +359,7 @@ class Agent:
                     self.stepPath(step)
                     object_detection_msg = self.processRGB()
                     self.handleObservation(object_detection_msg)
-                obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+                obj_id = self.processRGB(object_name="Knife")
                 if obj_id is not None:
                     print(
                         "[AGENT]: Image at ({}, {}, {}) saw knife with id: {}".format(
@@ -287,6 +376,7 @@ class Agent:
                     self.updateFilters()
                     self.saveDistributions()
                     top_k = frameFilter.getMaxWeightParticles()
+                    attempts += 1
                     continue
                 if self.pickup(obj_id):
                     print("[AGENT]: Grasped the knife!")
@@ -300,12 +390,17 @@ class Agent:
                     self.updateFilters()
                     self.saveDistributions()
                     top_k = frameFilter.getMaxWeightParticles()
+                    attempts += 1
+            if not knifeGrasped:
+                print ("[AGENT]: Grasp Knife failed after {} retries".format(self.retries))
+                return False
             top_k = frameFilter.getMaxWeightParticles()
             topKIndex = 0
             tomatoSliced = False
-            while not tomatoSliced and topKIndex <= 50:
+            attempts = 0
+            while not tomatoSliced and attempts < self.retries:
                 try:
-                    currentBestEstimate = top_k[topKIndex][0]
+                    currentBestEstimate = top_k[0][0]
                 except IndexError:
                     print("[AGENT]: Unable to slice tomato with all given poses")
                     return False
@@ -324,21 +419,31 @@ class Agent:
                     object_detection_msg = self.processRGB()
                     self.handleObservation(object_detection_msg)
                 # self.followPath(path)
-                obj_id, _ = self.processRGB(object_name="Tomato", return_poses=True)
+                obj_id = self.processRGB(object_name="Tomato")
                 if obj_id is None:
                     print("[AGENT]: Updating Filters and saving Distributions")
                     self.updateFilters()
                     self.saveDistributions()
                     top_k = frameFilter.getMaxWeightParticles()
+                    attempts += 1
                 else:
                     if self.slice(obj_id):
                         print("[AGENT]: Successfully sliced tomato with a knife")
+                        print("[AGENT]: Saving Final Distributions")
+                        self.saveDistributions()
                         return True
                     else:
                         print("[AGENT]: Slice Failed")
                         self.updateFilters()
                         self.saveDistributions()
                         top_k = frameFilter.getMaxWeightParticles()
+                        attempts += 1
+            if not tomatoSliced:
+                print ("[AGENT]: Grasped the Knife, but Slice Tomato failed after {} retries".format(self.retries))
+                return False
+            else:
+                return True
+                
         elif frame_name == "Slice_Apple":
             knifeGrasped = False
             topKIndex = 0
@@ -362,7 +467,7 @@ class Agent:
                     object_detection_msg = self.processRGB()
                     self.handleObservation(object_detection_msg)
                 # self.followPath(path)
-                obj_id, _ = self.processRGB(object_name="Knife", return_poses=True)
+                obj_id = self.processRGB(object_name="Knife")
                 if obj_id is not None:
                     print(
                         "[AGENT]: Image at ({}, {}, {}) saw knife with id: {}".format(
@@ -417,7 +522,7 @@ class Agent:
                     object_detection_msg = self.processRGB()
                     self.handleObservation(object_detection_msg)
                 # self.followPath(path)
-                obj_id, _ = self.processRGB(object_name="Apple", return_poses=True)
+                obj_id = self.processRGB(object_name="Apple")
                 if obj_id is None:
                     print("[AGENT]: Updating Filters and saving Distributions")
                     self.updateFilters()
@@ -491,19 +596,20 @@ class Agent:
             i += 1
         return False
 
-    def processRGB(self, object_name=None, return_poses=False):
+    def processRGB(self, object_name=None):
         """
         Process the latest RGB img
 
         Args:
-            object_name (str): String of clean object id. If provided, this returns the object_id and interactable_poses
-            return_poses (bool): If True, return interactable poses
+            object_name (str): String of clean object id. If provided, this returns the object_id otherwise (object_name == None) the entire detection msg is returned
+            
         """
         # rgb = self.controller.last_event.third_party_camera_frames[0]
         # cv2.imwrite("/home/cuhsailus/Desktop/Research/22_academic_year/thor_test/{}.png".format(self.cam_idx), rgb)
         # self.cam_idx += 1
         self.idx += 1
         obj_dets = self.controller.last_event.instance_detections2D
+        elementToIDMap = {}
         try:
             cur_robot_pose = {
                 "x": self.controller.last_event.metadata["agent"]["position"]["x"],
@@ -515,31 +621,33 @@ class Agent:
             }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
             # print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
-                if utils.cleanObjectID(obj_id) in self.frameElements:
-                    print("Observed {}".format(utils.cleanObjectID(obj_id)))
-                    interactable_poses = self.controller.step(
-                        action="GetInteractablePoses",
-                        objectId=obj_id,
-                        rotations=[0, 90, 180, 270],
-                        horizons=[0],
-                        standings=[True],
-                    ).metadata["actionReturn"]
-                    # if interactable_poses is not None:
-                    #     object_detection_msg[obj_id] = interactable_poses
+                for frameElement in self.frameElements:
+                    if frameElement in utils.cleanObjectID(obj_id):# in self.frameElements:
+                        # print("Observed {}".format(obj_id))
+                        interactable_poses = self.controller.step(
+                            action="GetInteractablePoses",
+                            objectId=obj_id,
+                            rotations=[0, 90, 180, 270],
+                            horizons=[0],
+                            standings=[True],
+                        ).metadata["actionReturn"]
+                        if interactable_poses is not None:
+                            elementToIDMap[frameElement] = obj_id
+                            object_detection_msg[frameElement] = interactable_poses
         except:
             pass
-        self.handleObservation(object_detection_msg)
+        if self.mode == 'sfm':
+            self.handleObservation(object_detection_msg)
         # print(object_detection_msg)
-        if return_poses:
-            # print("Returning poses!")
-            # return poses only for object of interest
-            for obj_id, poses in object_detection_msg.items():
-                if utils.cleanObjectID(obj_id) == object_name:
-                    return obj_id, poses
-        elif object_name is None:
+        if object_name is not None:
+            for frameElement, _ in object_detection_msg.items():
+                if frameElement == object_name:
+                    return elementToIDMap[frameElement]
+            # Did not observe object of interest
+            return None
+        else:
             # return entire detection msg
             return object_detection_msg
-        return None, None
 
     def goTo(self, goal):
         """
@@ -556,7 +664,11 @@ class Agent:
             path = self.nav.planPath(self.cur_pose, goal)
         else:
             path = self.nav.planPath(self.cur_pose, goal)
-        return self.followPath(path)
+        self.followPath(path)
+        # check we reached goal
+        if not (self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']):
+            return False
+        return True
 
     def stepPath(self, step):
         # print(step)
@@ -577,7 +689,8 @@ class Agent:
             "z": self.controller.last_event.metadata["agent"]["position"]["z"],
             "yaw": round(self.controller.last_event.metadata["agent"]["rotation"]["y"]),
         }
-        self.saveTopDown()
+        assert(self.controller.last_event.metadata['agent']['cameraHorizon'] == 0)
+        # self.saveTopDown()
 
     def saveTopDown(self):
         topdown_img = self.controller.last_event.third_party_camera_frames[0][
