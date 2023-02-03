@@ -10,6 +10,7 @@ class ParticleFilter:
         self.valid_poses = controller.step(action="GetReachablePositions").metadata[
             "actionReturn"
         ]
+        # print("[FILTERS]: {} nValidPoses: {}".format(self.label, len(self.valid_poses)))
         nPoses = len(self.valid_poses)
         self.nParticles = nPoses * 4
         self.particles = np.zeros([self.nParticles, 3])  # 4 rotations for each x,z pose
@@ -42,8 +43,8 @@ class ParticleFilter:
                 self.particles[idx, 1] = pose["z"]
                 self.particles[idx, 2] = rot
                 idx += 1
+        # print("[FILTER]: idx = {}".format(idx))
         self.saveIdx = 0
-
         self.negative_regions = []
 
     def add_negative_region(self, region):
@@ -82,7 +83,7 @@ class ParticleFilter:
 
     def saveDistribution(self, trial_name):
         cm = plt.cm.get_cmap("winter")
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10,10))
         axs = fig.gca()
         weightMap = np.clip(self.weights / np.max(self.weights), 0, 1)
         sc = axs.scatter(
@@ -93,6 +94,11 @@ class ParticleFilter:
             alpha=weightMap,
         )
         axs.set_title("{} Distribution @ step {}".format(self.label, self.saveIdx))
+        axs.set_xlabel("X")
+        axs.set_xticks(np.arange(min(self.particles[:,0])-0.5, max(self.particles[:,0])+0.5, 0.5))
+        axs.set_yticks(np.arange(min(self.particles[:,1])-0.5, max(self.particles[:,1])+0.5, 0.25))
+        axs.set_ylabel("Z")
+        axs.grid()
         fig.colorbar(sc)
         fig.savefig(
             "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
@@ -187,7 +193,7 @@ class ObjectParticleFilter(ParticleFilter):
             return False
 
 
-    def assignWeight(self, particle):
+    def assignWeight(self, particle, state):
         # for region in self.negative_regions:
         #     min_x, max_x, min_z, max_z = region[0], region[1], region[2], region[3]
         #     if min_x <= particle[0] <= max_x and min_z <= particle[1] <= max_z:
@@ -195,14 +201,14 @@ class ObjectParticleFilter(ParticleFilter):
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         for region in self.negative_regions:
             # print(region)
-            if self.check_point_in_fov(region, particle[0], particle[1]):
+            if self.check_point_in_fov(region, particle[0], particle[1]) and (particle[2] == state.robot_cur_pose["yaw"]):
                 # print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
                 return 0.0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
 
 
         for pose in self.negative_poses:
-            if particle[0] == pose["x"] and particle[1] == pose["z"]:
+            if particle[0] == pose["x"] and particle[1] == pose["z"] and particle[2] == pose['yaw']:
                 # print("Negative Pose")
                 return 0.0
         max_phi = -1e9
@@ -229,9 +235,10 @@ class ObjectParticleFilter(ParticleFilter):
                     max_phi = phi
         return max_phi
 
-    def updateFilter(self):
+    def updateFilter(self, state):
+        # print("Cur robot yaw: {}".format(state.robot_cur_pose['yaw']))
         for i, particle in enumerate(self.particles):
-            weight = self.assignWeight(particle)
+            weight = self.assignWeight(particle, state)
             self.weights[i] += weight
         self.weights /= np.sum(self.weights)
 
@@ -342,7 +349,7 @@ class FrameParticleFilter(ParticleFilter):
                     and otherParticle[1] == particle[1]
                     and otherParticle[2] == particle[2]
                 ):
-                    potential += coreElementFilter.weights[j]
+                    potential += (1/coreElementWeightModifier**2)*coreElementFilter.weights[j]
                 else:
                     potential += 0
                 # print("otherParticle at ({}, {}, {})".format(otherParticle[0], otherParticle[1], otherParticle[2]))
