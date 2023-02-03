@@ -187,7 +187,7 @@ class ObjectParticleFilter(ParticleFilter):
             return False
 
 
-    def assignWeight(self, particle):
+    def assignWeight(self, particle, state):
         # for region in self.negative_regions:
         #     min_x, max_x, min_z, max_z = region[0], region[1], region[2], region[3]
         #     if min_x <= particle[0] <= max_x and min_z <= particle[1] <= max_z:
@@ -195,7 +195,7 @@ class ObjectParticleFilter(ParticleFilter):
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         for region in self.negative_regions:
             # print(region)
-            if self.check_point_in_fov(region, particle[0], particle[1]):
+            if self.check_point_in_fov(region, particle[0], particle[1]) and (particle[2] == state.robot_cur_pose["yaw"]):
                 # print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
                 return 0.0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
@@ -229,9 +229,9 @@ class ObjectParticleFilter(ParticleFilter):
                     max_phi = phi
         return max_phi
 
-    def updateFilter(self):
+    def updateFilter(self, state):
         for i, particle in enumerate(self.particles):
-            weight = self.assignWeight(particle)
+            weight = self.assignWeight(particle, state)
             self.weights[i] += weight
         self.weights /= np.sum(self.weights)
 

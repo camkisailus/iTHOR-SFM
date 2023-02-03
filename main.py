@@ -176,7 +176,7 @@ if __name__ == "__main__":
             print("[DRIVER]: Success")
         else:
             print("[DRIVER]: Failure")
-        # break
+        break
     # except Exception as e:
     #     print("[ERROR]: {}...Floorplan was {}".format(e, kitchen_scene))
     #     suc = False

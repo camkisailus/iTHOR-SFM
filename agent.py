@@ -10,9 +10,9 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
 class State:
-    def __init__(self, action_history=[]):
+    def __init__(self, pose, action_history=[]):
         self.action_history = action_history
-
+        self.robot_cur_pose = pose
 
 class Agent:
     def __init__(self, controller, pose, frames, objects, trial_name, mode):
@@ -57,7 +57,7 @@ class Agent:
         # for filter in self.frame_filters.values():
         #     print(filter)
 
-        self.state = State()
+        self.state = State(self.cur_pose)
         self.frameElements = [label for label in self.object_filters.keys()]
         if mode == 'oracle':
             self.oracle = {}
@@ -66,6 +66,7 @@ class Agent:
             for obj in controller.last_event.metadata["objects"]:
                 for frameElement in self.frameElements:
                     if frameElement in obj['objectType']:
+                        print("Getting poses for: {}".format(obj['objectType']))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj['objectId'],
@@ -73,7 +74,11 @@ class Agent:
                             horizons=[0],
                             standings=[True],
                         ).metadata["actionReturn"]
-                        self.oracle[frameElement] = interactable_poses
+                        print(len(interactable_poses))
+                        try:
+                            self.oracle[frameElement].append(interactable_poses)
+                        except KeyError:
+                            self.oracle[frameElement] = interactable_poses
 
         for frameElement, poses in self.oracle.items():
             print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
@@ -689,6 +694,7 @@ class Agent:
             "z": self.controller.last_event.metadata["agent"]["position"]["z"],
             "yaw": round(self.controller.last_event.metadata["agent"]["rotation"]["y"]),
         }
+        self.state.robot_cur_pose = self.cur_pose
         assert(self.controller.last_event.metadata['agent']['cameraHorizon'] == 0)
         # self.saveTopDown()
 
