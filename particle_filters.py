@@ -206,6 +206,7 @@ class ObjectParticleFilter(ParticleFilter):
                 # print("Particle in negative region ({}, {}, {})".format(particle[0], particle[1], particle[2]))
                 dist = math.sqrt((particle[0]-state.robot_cur_pose["x"])**2 + (particle[2]-state.robot_cur_pose["z"])**2)
                 return -math.exp(-5*dist)
+                # return 0.0
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
 
 
