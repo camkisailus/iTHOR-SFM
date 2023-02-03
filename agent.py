@@ -10,13 +10,14 @@ ROOT = os.path.dirname(os.path.realpath(__file__))
 
 
 class State:
-    def __init__(self, action_history=[]):
+    def __init__(self, pose, action_history=[]):
         self.action_history = action_history
-
+        self.robot_cur_pose = pose
 
 class Agent:
     def __init__(self, controller, pose, frames, objects, trial_name, mode):
         self.trial_name = trial_name
+        self.mode = mode
         if mode == 'sfm':
             os.mkdir(os.path.join(ROOT, "top_down", "trial_{}".format(trial_name)))
             os.mkdir(os.path.join(ROOT, "distributions", "trial_{}".format(trial_name)))
@@ -57,7 +58,7 @@ class Agent:
         # for filter in self.frame_filters.values():
         #     print(filter)
 
-        self.state = State()
+        self.state = State(self.cur_pose)
         self.frameElements = [label for label in self.object_filters.keys()]
         if mode == 'oracle':
             self.oracle = {}
@@ -66,6 +67,7 @@ class Agent:
             for obj in controller.last_event.metadata["objects"]:
                 for frameElement in self.frameElements:
                     if frameElement in obj['objectType']:
+                        print("Getting poses for: {}".format(obj['objectType']))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj['objectId'],
@@ -73,42 +75,25 @@ class Agent:
                             horizons=[0],
                             standings=[True],
                         ).metadata["actionReturn"]
-                        self.oracle[frameElement] = interactable_poses
-
-        for frameElement, poses in self.oracle.items():
-            print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
+                        print(len(interactable_poses))
+                        try:
+                            self.oracle[frameElement].append(interactable_poses)
+                        except KeyError:
+                            self.oracle[frameElement] = interactable_poses
+            for frameElement, poses in self.oracle.items():
+                print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
         self.retries = 5
         if self.mode == 'sfm':
+            print("[AGENT]: Saving initial particle distributions")
+            self.saveDistributions()
+            # exit()
             self.observeSurroundings()
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
-            objFilter.updateFilter()
+            objFilter.updateFilter(self.state)
         for frameFilter in self.frame_filters.values():
             frameFilter.updateFilter(self.state)
-
-    # def check_point_in_fov(self, x1, y1, xp, yp, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
-
-    #     angle = fov/2
-    #     range_x = visibility_dist/math.cos(2*angle*math.pi/360)
-
-    #     #left vertex
-    #     x2 = x1 - range_x
-    #     y2 = y1 + visibility_dist
-
-    #     #right vertex
-    #     x3 = x1 + range_x
-    #     y3 = y1 + visibility_dist
-
-    #     #perform tests
-    #     t1 = (x2-x1)*(yp-y1)-(y2-y1)*(xp-x1)
-    #     t2 = (x3-x2)*(yp-y2)-(y3-y2)*(xp-x2)
-    #     t3 = (x1-x3)*(yp-y3)-(y1-y3)*(xp-x3)
-        
-    #     if (t1<0 and t2<0 and t3<0) or (t1>0 and t2>0 and t3>0):
-    #         return True
-    #     else:
-    #         return False
 
     def make_region(self, x1, y1, fov, visibility_dist): #x1, y1 is robot position, considering rotation switch x1, y1
 
@@ -124,8 +109,6 @@ class Agent:
         y3 = y1 + visibility_dist
 
         return [x1, y1, x2, y2, x3, y3]
-
-
 
     def handleObservation(self, observation):
         objectSeen = set()
@@ -194,6 +177,7 @@ class Agent:
                     
 
     def saveDistributions(self, filterName=None):
+        return
         # print("Saving Distributions!!!!!!!!!!!!")
         if filterName is None:
             for filter in self.object_filters.values():
@@ -235,6 +219,7 @@ class Agent:
         self.controller.step(action="Done")
 
     def observeSurroundings(self):
+        print("[AGENT]: Observing the surroundings")
         self.saveDistributions()
         for i in range(4):
             # Quick observation of surroundings
@@ -353,7 +338,7 @@ class Agent:
                     "z": currentBestEstimate[1],
                     "yaw": currentBestEstimate[2],
                 }
-                # print("navGoal is {}".format(navGoal))
+                print("navGoal is {}".format(navGoal))
                 path = self.nav.planPath(self.cur_pose, navGoal)
                 for step in path:
                     self.stepPath(step)
@@ -666,6 +651,7 @@ class Agent:
             path = self.nav.planPath(self.cur_pose, goal)
         self.followPath(path)
         # check we reached goal
+        # assert((self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']))
         if not (self.cur_pose['x'] == goal['x'] and self.cur_pose['z'] == goal['z'] and self.cur_pose['yaw'] == goal['yaw']):
             return False
         return True
@@ -689,6 +675,7 @@ class Agent:
             "z": self.controller.last_event.metadata["agent"]["position"]["z"],
             "yaw": round(self.controller.last_event.metadata["agent"]["rotation"]["y"]),
         }
+        self.state.robot_cur_pose = self.cur_pose
         assert(self.controller.last_event.metadata['agent']['cameraHorizon'] == 0)
         # self.saveTopDown()
 
