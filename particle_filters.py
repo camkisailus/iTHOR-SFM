@@ -386,11 +386,6 @@ class FrameParticleFilter(ParticleFilter):
         self.weights /= np.sum(self.weights)
 
 
-class State:
-    def __init__(self, action_history=[]):
-        self.action_history = action_history
-
-
 if __name__ == "__main__":
     knife_pf = ObjectParticleFilter("Knife", None)
     tomato_pf = ObjectParticleFilter("Tomato", None)

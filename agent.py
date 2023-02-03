@@ -73,7 +73,11 @@ class Agent:
                             horizons=[0],
                             standings=[True],
                         ).metadata["actionReturn"]
-                        self.oracle[frameElement] = interactable_poses
+                        try:
+                            if len(interactable_poses) > 0:
+                                self.oracle[frameElement].append(interactable_poses)
+                        except:
+                            self.oracle[frameElement] = interactable_poses
 
         for frameElement, poses in self.oracle.items():
             print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
@@ -247,7 +251,10 @@ class Agent:
     def oracle_execute(self, frame_name):
         print("[AGENT]: Running Oracle Execution")
         if frame_name == 'Slice_Tomato':
-            poses = self.oracle['Knife']
+            try:
+                poses = self.oracle['Knife']
+            except KeyError:
+                return False
             i = 0
             knifeGrasped = False
             while i < self.retries:
@@ -276,7 +283,10 @@ class Agent:
                 print("[AGENT]: Failed to grasp knife after {} retries".format(self.retries))
                 return False
             tomatoSliced = False
-            poses = self.oracle['Tomato']
+            try:
+                poses = self.oracle['Tomato']
+            except:
+                return False
             i = 0
             while i < self.retries:
                 try:

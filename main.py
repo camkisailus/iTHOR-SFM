@@ -95,7 +95,7 @@ if __name__ == "__main__":
     controller = Controller(
         agentMode="default",
         visibilityDistance=1.5,
-        scene="FloorPlan27_physics",
+        scene="FloorPlan3_physics",
         # step sizes
         gridSize=0.25,
         snapToGrid=True,
