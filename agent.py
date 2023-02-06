@@ -790,7 +790,11 @@ class Agent:
         }
         self.state.robot_cur_pose = self.cur_pose
         assert self.controller.last_event.metadata["agent"]["cameraHorizon"] == 0
+<<<<<<< HEAD
         self.saveTopDown()
+=======
+        # self.saveTopDown()
+>>>>>>> 1eea10e2e4cdd65ae5cfe546ade51c8fc62ae497
 
     def saveTopDown(self):
         topdown_img = self.controller.last_event.third_party_camera_frames[0][
