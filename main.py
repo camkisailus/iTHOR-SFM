@@ -91,7 +91,7 @@ if __name__ == "__main__":
     floorPlan, frames, objects, actions = utils.loadExperimentConfig(
         os.path.join(ROOT, "experiment_configs", "exp_1.yaml")
     )
-    scene = "FloorPlan1_physics"
+    scene = "FloorPlan3_physics"
     # for frame in frames:
     #     print(frame)
     # print("#"*20)
@@ -168,8 +168,8 @@ if __name__ == "__main__":
         rotation=dict(x=0, y=agent_pose["yaw"], z=0),
     )
     # try:
-    # ag = Agent(controller, agent_pose, frames, objects, trial_name="{}_oracle".format(scene), mode='oracle')
-    ag = Agent(controller, agent_pose, frames, objects, trial_name="vis_1_{}".format(scene), mode='sfm')
+    # ag = Agent(controller, agent_pose, frames, objects, trial_name="gPlate_{}_oracle".format(scene), mode='oracle')
+    ag = Agent(controller, agent_pose, frames, objects, trial_name="makeSandwich2CascadingPreconditions_{}".format(scene), mode='sfm')
     # suc, tot = testNav(ag)
     # success+= suc
     # total += tot
@@ -180,6 +180,7 @@ if __name__ == "__main__":
         suc = ag.execute(action)
     if suc:
         success += 1
+        ag.saveTopDown()
         print("[DRIVER]: Success")
     else:
         print("[DRIVER]: Failure")
@@ -188,10 +189,11 @@ if __name__ == "__main__":
     # suc_rate = (success/total)*100
     # print("Overall success rate: {}".format(suc_rate))
     # print("Total Success Rate: {:.4f}%".format((success/len(kitchens))*100))
-    exit()
     # ag.goTo(goal={'x':-4.0, 'z':-1.0, 'yaw':0.0})
     # ag.makeVideo()
     # testNav(ag)
-    exit()
+    controller.step(
+        action="Done"
+    )
     while True:
         pass

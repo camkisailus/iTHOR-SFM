@@ -1,0 +1,9 @@
+name: Slice_Bread
+description: Grasp a Knife then Slice the bread loaf
+frame_elements:
+  - name: Knife
+    is_core: True
+  - name: Bread
+    is_core: True
+preconditions:
+  - name: Grasp_Knife

@@ -1,0 +1,13 @@
+# semantic frame
+# grasp_tomato_sf.yaml 
+
+name: Put_AppleSlice_on_BreadSlice
+description: Put a apple slice on a bread slice
+frame_elements:
+  - name: AppleSlice
+    is_core: True
+  - name: BreadSlice
+    is_core: True
+preconditions:
+  - name: Slice_Bread
+  - name: Grasp_AppleSlice

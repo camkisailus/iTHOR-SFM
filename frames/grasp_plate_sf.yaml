@@ -1,0 +1,8 @@
+# semantic frame
+# grasp_tomato_sf.yaml 
+
+name: Grasp_Plate
+description: Grasp a Plate
+frame_elements:
+  - name: Plate
+    is_core: True

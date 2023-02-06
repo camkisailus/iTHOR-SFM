@@ -41,7 +41,12 @@ class Frame:
 
 
 def cleanObjectID(objectID):
-    return objectID.split("|")[0]
+    if "Sliced" in objectID:
+        # form of objectID for sliced objects is: Apple|-01.75|+01.37|-01.16|AppleSliced_0
+        return objectID.split("|")[-1].split("_")[0]
+    else:
+        # form of objectID for not sliced objects is: Apple|-01.75|+01.37|-01.16
+        return objectID.split("|")[0]
 
 
 def loadExperimentConfig(config_path):
