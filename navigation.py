@@ -176,6 +176,13 @@ class Navigation:
 
     def planPath(self, robot_pose, goal_pose, tolerance=0.05):
         # print("Planning path to ({}, {}, {}) from ({}, {}, {})".format(goal_pose['x'], goal_pose['z'], goal_pose['yaw'], robot_pose['x'], robot_pose['z'], robot_pose['yaw']))
+        # if goal_pose['x'] == robot_pose['x'] and goal_pose['z'] == robot_pose['z']:
+        #     goal_reached=True
+        #     if goal_pose['yaw'] == robot_pose['yaw']:
+        #         print("[NAV]: Agent already at goal pose")
+        #         return []
+        # else:
+        #     goal_reached = False
         goal = (goal_pose["x"], goal_pose["z"])
         goal_pose_np = np.tile(goal, (self.reachable_poses.shape[0], 1))
         dists = np.sqrt(
@@ -184,7 +191,7 @@ class Navigation:
         if np.min(dists) > tolerance:
             ## Cannot get within tolerance of goal
             print(
-                "No reachable poses near the goal location.. Will not attempt to plan"
+                "[NAV]: No reachable poses near the goal location.. Will not attempt to plan"
             )
             pass
         else:

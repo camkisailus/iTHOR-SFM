@@ -130,6 +130,7 @@ class ObjectParticleFilter(ParticleFilter):
         self.negative_poses = []
 
     def addObservation(self, interactablePoses):
+        self.observations = []
         for pose in interactablePoses:
             self.observations.append(
                 {"x": pose["x"], "z": pose["z"], "yaw": pose["rotation"]}
@@ -310,6 +311,8 @@ class FrameParticleFilter(ParticleFilter):
             potential = 1.0
             while i < len(self.preconditions):
                 subtaskFilter = self.precondition_filters[self.preconditions[i]]
+                # if self.label == "Slice_bread":
+                #     print("[FILTERS]: Subtask is {} ".format(subtaskFilter.label))
                 # print("Subtask filter name: {}".format(subtaskFilter.label))
                 for j in range(subtaskFilter.nParticles):
                     otherParticle = subtaskFilter.particles[j, :]
@@ -331,13 +334,16 @@ class FrameParticleFilter(ParticleFilter):
 
     def measurementPotential(self, particle, state):
         i = 0
+        for frameElement in self.frame_elements:
+            if frameElement in state.objectInGripper:
+                i+=1
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
-        if self.preconditions:
-            for precondition in self.preconditions:
-                if precondition not in state.action_history:
-                    break
-                else:
-                    i += 1
+        # if self.preconditions:
+        #     for precondition in self.preconditions:
+        #         if precondition not in state.action_history:
+        #             break
+        #         else:
+        #             i += 1
         potential = 0
         coreElementWeightModifier = 1
         while i < len(self.frame_elements):

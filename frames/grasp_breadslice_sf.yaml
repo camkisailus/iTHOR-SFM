@@ -1,0 +1,10 @@
+# semantic frame
+# grasp_tomato_sf.yaml 
+
+name: Grasp_BreadSlice
+description: Grasp a bread slice
+frame_elements:
+  - name: BreadSlice
+    is_core: True
+preconditions:
+  - name: Slice_Bread
