@@ -115,6 +115,7 @@ if __name__ == "__main__":
         fieldOfView=90,
         # platform=CloudRendering
     )
+    
     # for obj in controller.last_event.metadata["objects"]:
     #     if "Tomato" in obj['objectType']:
     #         print(obj['objectId'])

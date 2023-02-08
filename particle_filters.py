@@ -128,6 +128,7 @@ class ObjectParticleFilter(ParticleFilter):
         )  # list of interactable poses ({'x', 'z', 'yaw'}) for object
         self.negative_regions = []  # list of boundaries (min_x, max_x, min_z, max_z)
         self.negative_poses = []
+        self.converged = False
 
     def addObservation(self, interactablePoses):
         self.observations = []
@@ -135,6 +136,8 @@ class ObjectParticleFilter(ParticleFilter):
             self.observations.append(
                 {"x": pose["x"], "z": pose["z"], "yaw": pose["rotation"]}
             )
+        self.converged = True
+        # print("[FILTERS]: {} Converged!".format(self.label))
 
     def addNegativePose(self, pose):
         self.negative_poses.append(pose)
@@ -269,6 +272,7 @@ class FrameParticleFilter(ParticleFilter):
         else:
             self.preconditions = None
         self.controller = controller
+        self.converged = False
 
     def __str__(self):
         string = "Label: {}\n\tnParticles: {}\n\tFrame Elements:\n".format(
@@ -397,6 +401,10 @@ class FrameParticleFilter(ParticleFilter):
             weight = self.assignWeight(self.particles[i, :], state)
             self.weights[i] += weight
         self.weights /= np.sum(self.weights)
+        if self.label.startswith("Grasp"):
+            # print("Checking convergence for {}".format(self.label))
+            # print("{} Converged? {}".format(self.frame_elements[0], self.frame_element_filters[self.frame_elements[0]].converged))
+            self.converged = True if self.frame_element_filters[self.frame_elements[0]].converged else False
 
 
 if __name__ == "__main__":
