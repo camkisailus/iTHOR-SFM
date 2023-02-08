@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import utils
 from navigation import Node
+import os
 
 class ParticleFilter:
     def __init__(self, label, controller):
@@ -81,7 +82,7 @@ class ParticleFilter:
         # print("###############")
         return self.particles[ind]
 
-    def saveDistribution(self, trial_name):
+    def saveDistribution(self, trial_name, dir):
         cm = plt.cm.get_cmap("winter")
         fig = plt.figure(figsize=(10,10))
         axs = fig.gca()
@@ -100,13 +101,12 @@ class ParticleFilter:
         axs.set_ylabel("Z")
         axs.grid()
         fig.colorbar(sc)
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+        #         trial_name, self.label, self.saveIdx
         fig.savefig(
-            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
-                trial_name, self.label, self.saveIdx
+            os.path.join(dir, "{}_{}".format(self.label, self.saveIdx))
             # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
             #     trial_name, self.label, self.saveIdx
-    
-            )
         )
         # fig.savefig(
         #     "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(

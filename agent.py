@@ -23,9 +23,11 @@ class Agent:
         self.trial_name = trial_name
         self.mode = mode
         self.verbose = verbose
-        if mode == "sfm":
-            os.mkdir(os.path.join(ROOT, "top_down", "trial_{}".format(trial_name)))
-            os.mkdir(os.path.join(ROOT, "distributions", "trial_{}".format(trial_name)))
+        self.distribution_dir = os.path.join(ROOT, "alfred", "distributions", "trial_{}".format(trial_name))
+        self.top_down_dir = os.path.join(ROOT, "alfred", "top_down", "trial_{}".format(trial_name))
+        # if mode == "sfm":
+        #     os.mkdir(self.distribution_dir)
+        #     os.mkdir(self.top_down_dir)
         self.controller = controller
         self.nav = Navigation(controller)
         self.cur_pose = pose
@@ -215,21 +217,22 @@ class Agent:
                 #     filter.addNegativePose(ip_in_view)
 
     def saveDistributions(self, filterName=None):
+        return
         if self.verbose:
             print("Saving Distributions count = {}".format(self.saveCount))
         self.saveCount += 1
         if filterName is None:
             for filter in self.object_filters.values():
-                filter.saveDistribution(self.trial_name)
+                filter.saveDistribution(self.trial_name, self.distribution_dir)
             for filter in self.frame_filters.values():
-                filter.saveDistribution(self.trial_name)
+                filter.saveDistribution(self.trial_name, self.distribution_dir)
         else:
             try:
-                self.object_filters[filterName].saveDistribution(self.trial_name)
+                self.object_filters[filterName].saveDistribution(self.trial_name, self.distribution_dir)
             except KeyError:
                 pass
             try:
-                self.frame_filters[filterName].saveDistribution(self.trial_name)
+                self.frame_filters[filterName].saveDistribution(self.trial_name, self.distribution_dir)
             except KeyError:
                 pass
 
@@ -467,6 +470,8 @@ class Agent:
                             )
                         )
                     objSeen=True
+                    self.setCameraHorizon(0) # put camera back to neutral
+                    break
             if not objSeen:
                 # Bad pose
                 if self.verbose:
@@ -748,8 +753,9 @@ class Agent:
     def execute(self, frame_name: str):
         if self.mode == "oracle":
             return self.oracle_execute(frame_name)
-        if self.verbose:
-            print("[AGENT]: Entering execute({})".format(frame_name))
+        
+        # print("[AGENT]: Entering execute({})".format(frame_name))
+        # print("[AGENT]: Action history: {}".format(self.state.action_history))
         frameFilter = self.frame_filters[frame_name]
         try:
             uncompletedPreconditions = [
@@ -766,10 +772,10 @@ class Agent:
             for precondition in uncompletedPreconditions:
                 suc, reason = self.execute(precondition)
                 if suc:
+                    # print(
+                    #     "[AGENT]: Action history: {}".format(self.state.action_history)
+                    # )
                     if self.verbose:
-                        print(
-                            "[AGENT]: Action history: {}".format(self.state.action_history)
-                        )
                         print("[AGENT]: Updating filters and saving distributions after successful execution")
                     self.updateFilters()
                     self.saveDistributions()
@@ -785,6 +791,7 @@ class Agent:
 
         if frame_name.split("_")[0] == "Grasp":
             if self.graspObject(frame_name.split("_", 1)[1], frameFilter):
+                # print("[AGENT]: Grasped {}".format(frame_name.split("_", 1)[1]))
                 return True, "Success"
             else:
                 if self.verbose:
@@ -1012,14 +1019,16 @@ class Agent:
         self.saveTopDown()
 
     def saveTopDown(self):
+        return
         topdown_img = self.controller.last_event.third_party_camera_frames[0][
             :, :, ::-1
         ]
         self.topdown_frames.append(topdown_img)
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/trial_{}/{}.png".format(
+            #     self.trial_name, self.cam_idx
+            # ),
         cv2.imwrite(
-            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/trial_{}/{}.png".format(
-                self.trial_name, self.cam_idx
-            ),
+            os.path.join(self.top_down_dir, "{}.png".format(self.cam_idx)),
             topdown_img,
         )
         self.cam_idx += 1
