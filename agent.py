@@ -25,9 +25,9 @@ class Agent:
         self.verbose = verbose
         self.distribution_dir = os.path.join(ROOT, "alfred", "distributions", "trial_{}".format(trial_name))
         self.top_down_dir = os.path.join(ROOT, "alfred", "top_down", "trial_{}".format(trial_name))
-        # if mode == "sfm":
-        #     os.mkdir(self.distribution_dir)
-        #     os.mkdir(self.top_down_dir)
+        if mode == "sfm":
+            os.mkdir(self.distribution_dir)
+            os.mkdir(self.top_down_dir)
         self.controller = controller
         self.nav = Navigation(controller)
         self.cur_pose = pose
@@ -217,7 +217,7 @@ class Agent:
                 #     filter.addNegativePose(ip_in_view)
 
     def saveDistributions(self, filterName=None):
-        return
+        # return
         if self.verbose:
             print("Saving Distributions count = {}".format(self.saveCount))
         self.saveCount += 1
@@ -296,6 +296,22 @@ class Agent:
             if self.verbose:
                 print("open({}) failed because of: {}".format(target, event.metadata["errorMessage"]))
 
+    def putRetry(self, target=None):
+        """
+            ONLY use if trying to put object on non standard receptacle
+        """
+        event = self.controller.step(
+            action="PutObject", objectId=target, forceAction=True, placeStationary=False
+        )
+        suc = event.metadata["lastActionSuccess"]
+        if suc:
+            if self.verbose:
+                print("[AGENT]: Force object placement")
+            return True
+        else:
+            print(event.metadata["errorMessage"])
+            return False
+
     def put(self, target=None):
         if self.verbose:
             print("Entering put({})".format(target))
@@ -319,8 +335,15 @@ class Agent:
         if suc:
             return True
         else:
+            err = event.metadata["errorMessage"]
             if self.verbose:
-                print("Put({}) failed because of: {}".format(target, event.metadata["errorMessage"]))
+                print("Put({}) failed because of: {}".format(target, err))
+            if "cannot be placed in" in err:
+                if self.verbose:
+                    print("[AGENT]: Invalid receptacle. Will force put now")
+                return self.putRetry(target)
+        exit()
+            
     def done(self):
         self.controller.step(action="Done")
 
@@ -431,14 +454,14 @@ class Agent:
                     self.state.objectInGripper = ""
                 else:
                     return False
+        attempts = 0
         # if we haven't seen the object yet, do a random search around the environment to gather more observations
-        if not filter.converged:
-            print("[AGENT]: {} is not converged".format(filter.label))
+        while not filter.converged and attempts < self.retries:
             self.searchFor(object)
+            attempts+=1
 
         objGrasped = False
         topKParticles = filter.getMaxWeightParticles()
-        attempts = 0
         while not objGrasped and attempts < self.retries:
             currentBestEstimate = topKParticles[0][0]
             navGoal = {
@@ -830,7 +853,8 @@ class Agent:
         return False, "Foobar"
 
     def searchFor(self, object_name):
-        print("Entering searchFor({})".format(object_name))
+        if self.verbose:
+            print("Entering searchFor({})".format(object_name))
         # explore randomly
         obj_found = False
         filter_idx = 0
@@ -843,62 +867,42 @@ class Agent:
                 self.stepPath(step)
                 ret = self.processRGB(object_name)
                 if ret is not None:
-                    print("[AGENT]: In searchFor() observed as {}".format(object_name))
+                    if self.verbose:
+                        print("[AGENT]: In searchFor() observed a {}".format(object_name))
                 self.updateFilters()
                 # print("Saving Distribution")
                 self.saveDistributions()
                 if self.frame_filters["Grasp_{}".format(object_name)].converged:
                     obj_found = True
-                    return
+                    return True
                 else:
-                    print("Grasp_{} not converged".format(object_name))
-                # filter_idx += 1
-                # if reachable_poses is not None:
-                #     obj_found = True
-                #     print("Total of {} poses found".format(len(reachable_poses)))
-                #     for i, pose in enumerate(reachable_poses):
-                #         print("Trying to reach from {}th pose".format(i))
-                #         # print(reachable_poses[0])
-                #         goal = {
-                #             "x": reachable_poses[i]["x"],
-                #             "z": reachable_poses[i]["z"],
-                #             "yaw": reachable_poses[i]["rotation"],
-                #         }
-                #         path = self.nav.planPath(self.cur_pose, goal)
-                #         for step in path:
-                #             self.stepPath(step)
-                #             self.processRGB()
-                #             self.updateFilters()
-                #             self.saveDistributions()
-                #         if self.slice(obj_id):
-                #             print("Successfully sliced the object")
-                #             self.done()
-                #             return True
-                        # self.followPath(path)
-                        # if self.pickup(obj_id):
-                        #     print("Picked up object!!")
-                        #     return True
-                        # print("Failed to pickup object")
-                        # print(obj_id
-                        # for obj in self.controller.last_event.metadata['objects']:
-                        #     if obj['objectId'] == obj_id:
-                        #         if obj['isPickedUp']:
-                        #             return True
-                        # if self.controller.last_event.metadata["objects"][obj_id]['isPickedUp']:
-                        #     return True
-
+                    if self.verbose:
+                        print("Grasp_{} not converged".format(object_name))
+                    return False
             i += 1
         return False
 
     def objectIdFromRGB(self, object_name:str):
         obj_dets = self.controller.last_event.instance_detections2D
+        # if "Table" in object_name:
+        #     print("Looking for {}".format(object_name))
+        #     print("#"*20)
         for obj_id, loc in obj_dets.items():
+            # if "Table" in obj_id:
+            # if "Table" in object_name:
+            #     print("Seeing a {}".format(obj_id))
             if object_name == utils.cleanObjectID(obj_id):
                 if self.verbose:
                     print("[AGENT]: Observed at {} with id {}".format(object_name, obj_id))
                 return obj_id
+        # if "Table" in object_name:
+        #     print("#"*20)
         # did not find object
         return None
+
+    
+    def needPerfectMatch(self, word):
+        return "Table" in word or "Lamp" in word or "Garbage" in word or "Towel" in word or "Pen" in word
     
     def processRGB(self, object_name=None, verbose=False):
         """
@@ -928,9 +932,21 @@ class Agent:
             # print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
                 for frameElement in self.frameElements:
-                    if frameElement in utils.cleanObjectID(
-                        obj_id
-                    ):  # in self.frameElements:
+
+                    if self.needPerfectMatch(frameElement) and frameElement == utils.cleanObjectID(obj_id):
+                        print("I see a {}".format(obj_id))
+                        interactable_poses = self.controller.step(
+                            action="GetInteractablePoses",
+                            objectId=obj_id,
+                            rotations=[0, 90, 180, 270],
+                            standings=[True],
+                        ).metadata["actionReturn"]
+                        # if frameElement == "BreadSlice":
+                        #     print("[AGENT]: Saw a bread slice!")
+                        if interactable_poses is not None:
+                            elementToIDMap[frameElement] = obj_id
+                            object_detection_msg[frameElement] = interactable_poses
+                    elif frameElement in utils.cleanObjectID(obj_id):  # in self.frameElements:
                         if (
                             "Slice" in utils.cleanObjectID(obj_id)
                             and "Slice" not in frameElement
