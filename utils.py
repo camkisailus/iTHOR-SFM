@@ -136,7 +136,13 @@ def loadFramesFromALFRED(goal_description):
         obj = goal_description.split("-")[1]
         if "Sliced" in obj:
             raise TypeError("This is not setup to deal with sliced objects yet")
+        # elif "Knife" in obj:
+        #     obj = "*Knife" 
         target = goal_description.split("-")[3]
+        if target == "BathtubBasin":
+            target = "Bathtub"
+        if target == "SinkBasin":
+            target= "Sink"
         if target in OPENABLE_RECEPS:
             # We will need to open it first to place the object
             open_target_frame = {

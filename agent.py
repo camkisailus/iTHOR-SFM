@@ -23,11 +23,11 @@ class Agent:
         self.trial_name = trial_name
         self.mode = mode
         self.verbose = verbose
-        self.distribution_dir = os.path.join(ROOT, "alfred", "distributions", "trial_{}".format(trial_name))
-        self.top_down_dir = os.path.join(ROOT, "alfred", "top_down", "trial_{}".format(trial_name))
-        if mode == "sfm":
-            os.mkdir(self.distribution_dir)
-            os.mkdir(self.top_down_dir)
+        # self.distribution_dir = os.path.join(ROOT, "alfred", "distributions", "trial_{}".format(trial_name))
+        # self.top_down_dir = os.path.join(ROOT, "alfred", "top_down", "trial_{}".format(trial_name))
+        # if mode == "sfm":
+        #     os.mkdir(self.distribution_dir)
+        #     os.mkdir(self.top_down_dir)
         self.controller = controller
         self.nav = Navigation(controller)
         self.cur_pose = pose
@@ -135,7 +135,7 @@ class Agent:
             except KeyError:
                 if self.verbose:
                     print("[AGENT]: KeyError when adding {} to filters".format(utils.cleanObjectID(obj_id)))
-                exit()
+                # exit()
 
         for filter in self.object_filters.values():
             if filter.label not in objectSeen:
@@ -217,7 +217,7 @@ class Agent:
                 #     filter.addNegativePose(ip_in_view)
 
     def saveDistributions(self, filterName=None):
-        # return
+        return
         if self.verbose:
             print("Saving Distributions count = {}".format(self.saveCount))
         self.saveCount += 1
@@ -238,18 +238,22 @@ class Agent:
 
     def setCameraHorizon(self, horizon:int):
         curHorizon = self.controller.last_event.metadata['agent']['cameraHorizon']
-        diff = horizon - curHorizon
-        if diff < 0:
+        diff = float(horizon) - float(round(curHorizon))
+        if diff > 0:
+            # print("Looking Down")
             # need to look down
             event = self.controller.step(
                 action="LookDown",
+                degrees=diff
+            )
+        elif diff < 0:
+            # print("Looking up")
+            event = self.controller.step(
+                action="LookUp",
                 degrees=-1*diff
             )
         else:
-            event = self.controller.step(
-                action="LookUp",
-                degrees=diff
-            )
+            return True
         return event.metadata['lastActionSuccess']
 
 
@@ -293,10 +297,14 @@ class Agent:
         if suc:
             return True
         else:
+            if "not an Openable object" in event.metadata["errorMessage"]:
+                # no need to open the object
+                return True
             if self.verbose:
                 print("open({}) failed because of: {}".format(target, event.metadata["errorMessage"]))
+            return False
 
-    def putRetry(self, target=None):
+    def putRetry(self, target):
         """
             ONLY use if trying to put object on non standard receptacle
         """
@@ -309,8 +317,32 @@ class Agent:
                 print("[AGENT]: Force object placement")
             return True
         else:
-            print(event.metadata["errorMessage"])
+            if self.verbose:
+                print(event.metadata["errorMessage"])
             return False
+    
+    def putMoveFirst(self, target):
+        self.controller.step(
+                    action="MoveHeldObjectLeft", moveMagnitude=0.1, 
+        )
+        event = self.controller.step(
+            action="PutObject", objectId=target, forceAction=False, placeStationary=False
+        )
+        suc = event.metadata["lastActionSuccess"]
+        if suc:
+            if self.verbose:
+                print("[AGENT]: Force object placement")
+            return True
+        else:
+            err = event.metadata["errorMessage"]
+            if self.verbose:
+                print(err)
+            if "cannot be placed in" in err or "No valid positions to place object found" in err:
+                if self.verbose:
+                    print("[AGENT]: Invalid receptacle. Will force put now")
+                return self.putRetry(target)
+            return False
+
 
     def put(self, target=None):
         if self.verbose:
@@ -328,21 +360,28 @@ class Agent:
                     target = tableTarget
             else:
                 target = counterTarget
+        
         event = self.controller.step(
             action="PutObject", objectId=target, forceAction=False, placeStationary=False
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
-            return True
+            return True, "Success"
         else:
             err = event.metadata["errorMessage"]
-            if self.verbose:
-                print("Put({}) failed because of: {}".format(target, err))
-            if "cannot be placed in" in err:
+            # if self.verbose:
+            # print("Put({}) failed because of: {}".format(target, err))
+            if "cannot be placed in" in err or "No valid positions to place object found" in err:
                 if self.verbose:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
-        exit()
+                # print("Force suc: {}".format(force_suc))
+                return force_suc
+            elif "Target object not found" in err:
+                return self.putMoveFirst(target)
+                return move_place_suc
+            else:
+                return False
             
     def done(self):
         self.controller.step(action="Done")
@@ -482,20 +521,26 @@ class Agent:
                 # self.handleObservation(object_detection_msg)
             # obj_id = self.processRGB(object_name=object)
             objSeen = False
-            for horizon in [-30, 0, 30, 60]:
-                self.setCameraHorizon(horizon)
-                obj_id = self.objectIdFromRGB(object_name=object)
-                if obj_id is not None:
-                    if self.verbose:
-                        print(
-                            "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
-                                navGoal["x"], navGoal["z"], navGoal["yaw"], object, obj_id
-                            )
-                        )
-                    objSeen=True
-                    self.setCameraHorizon(0) # put camera back to neutral
-                    break
-            if not objSeen:
+            obj_id = self.objectIdFromRGB(object_name=object)
+            # if obj_id is not None:
+            #     objSeen = True
+            # if obj_id is None:
+            #     for horizon in [-30, 0, 30, 60]:
+            #         self.setCameraHorizon(horizon)
+            #         obj_id = self.objectIdFromRGB(object_name=object)
+            #         if obj_id is not None:
+            #             if self.verbose:
+            #                 print(
+            #                     "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
+            #                         navGoal["x"], navGoal["z"], navGoal["yaw"], object, obj_id
+            #                     )
+            #                 )
+            #             objSeen=True
+            #             self.setCameraHorizon(0) # put camera back to neutral
+            #             break
+            # else:
+            #     objSeen = True
+            if obj_id is None:
                 # Bad pose
                 if self.verbose:
                     print(
@@ -617,8 +662,6 @@ class Agent:
             for step in path:
                 self.stepPath(step)
                 self.processRGB()
-                # self.handleObservation(object_detection_msg)
-            # obj_id = self.processRGB(object_name=target)
             obj_id = self.objectIdFromRGB(object_name=target)
             if obj_id is not None:
                 if self.verbose:
@@ -640,7 +683,9 @@ class Agent:
                 topKParticles = filter.getMaxWeightParticles()
                 attempts += 1
                 continue
-            if self.put(obj_id):
+            put_suc = self.put(obj_id)
+            # print("Put suc: {}".format(put_suc))
+            if put_suc: #self.put(obj_id):
                 if self.verbose:
                     print("[AGENT]: Put {} on {}!".format(object, target))
                 self.state.action_history.append("Put_{}_on_{}".format(object, target))
@@ -819,7 +864,7 @@ class Agent:
             else:
                 if self.verbose:
                     print("[AGENT]: In Execute.... Grasp Failed")
-                return False, "Grasp({}) Failed".format(frame_name.split("_", 1)[1])
+                return False, self.controller.last_event.metadata["errorMessage"]#Grasp({}) Failed".format(frame_name.split("_", 1)[1])
         elif frame_name.split("_")[0] == "Slice":
             if self.sliceObj(frame_name.split("_")[1], frameFilter):
                 # get positions of object slices
@@ -827,27 +872,27 @@ class Agent:
                 self.updateFilters()
                 return True, "Success"
             else:
-                return False, "Slice({}) Failed".format(frame_name.split("_")[1])
+                return False, self.controller.last_event.metadata["errorMessage"]#"Slice({}) Failed".format(frame_name.split("_")[1])
         elif frame_name.split("_")[0] == "Put":
             obj = frame_name.split("_")[1]  # obj to put
             receptacle = frame_name.split("_")[-1]  # receptacle
             if self.putObject(obj, receptacle, frameFilter):
                 return True, "Success"
             else:
-                return False, "put({}, {}) Failed".format(obj, receptacle)
+                return False, self.controller.last_event.metadata["errorMessage"]#"put({}, {}) Failed".format(obj, receptacle)
         elif frame_name.split("_")[0] == "Open":
             target = frame_name.split("_")[1]
             if self.openReceptacle(target, frameFilter):
                 return True, "Success"
             else:
-                return False, "openReceptacle({}) Failed".format(target)
+                return False, self.controller.last_event.metadata["errorMessage"]#"openReceptacle({}) Failed".format(target)
         elif frame_name.split("_")[0] == "Look":
             target = frame_name.split("_")[-1]
             obj= frame_name.split("_")[2]
             if self.lookUnder(obj, target, frameFilter):
                 return True, "Success"
             else:
-                return False, "lookUnder({}, {}) Failed".format(obj, target)
+                return False, self.controller.last_event.metadata["errorMessage"]#"lookUnder({}, {}) Failed".format(obj, target)
 
 
         return False, "Foobar"
@@ -883,26 +928,35 @@ class Agent:
         return False
 
     def objectIdFromRGB(self, object_name:str):
+        objSeen = False
+        objId = None
+        # Check at current Horizon
         obj_dets = self.controller.last_event.instance_detections2D
-        # if "Table" in object_name:
-        #     print("Looking for {}".format(object_name))
-        #     print("#"*20)
         for obj_id, loc in obj_dets.items():
-            # if "Table" in obj_id:
-            # if "Table" in object_name:
-            #     print("Seeing a {}".format(obj_id))
             if object_name == utils.cleanObjectID(obj_id):
                 if self.verbose:
                     print("[AGENT]: Observed at {} with id {}".format(object_name, obj_id))
-                return obj_id
-        # if "Table" in object_name:
-        #     print("#"*20)
-        # did not find object
-        return None
+                objSeen = True
+                objId = obj_id
+        if not objSeen:
+            # print("[AGENT]: Iterating through horizons")
+            for horizon in [-30, 0, 30, 60]:
+                self.setCameraHorizon(horizon)
+                # self.controller.step(action="Done")
+                # assert(round(self.controller.last_event.metadata['agent']['cameraHorizon']) == horizon)
+                obj_dets = self.controller.last_event.instance_detections2D
+                for obj_id, loc in obj_dets.items():
+                    if object_name == utils.cleanObjectID(obj_id):
+                        if self.verbose:
+                            print("[AGENT]: Observed at {} with id {}".format(object_name, obj_id))
+                        objSeen = True
+                        objId = obj_id
+                        break
+        return objId
 
     
-    def needPerfectMatch(self, word):
-        return "Table" in word or "Lamp" in word or "Garbage" in word or "Towel" in word or "Pen" in word
+    # def needPerfectMatch(self, word):
+    #     return "Table" in word or "Lamp" in word or "Garbage" in word or "Towel" in word or "Pen" in word
     
     def processRGB(self, object_name=None, verbose=False):
         """
@@ -932,9 +986,9 @@ class Agent:
             # print("Looking for {}".format(self.frameElements))
             for obj_id, loc in obj_dets.items():
                 for frameElement in self.frameElements:
-
-                    if self.needPerfectMatch(frameElement) and frameElement == utils.cleanObjectID(obj_id):
-                        print("I see a {}".format(obj_id))
+                    if frameElement == utils.cleanObjectID(obj_id):
+                        if self.verbose:
+                            print("I see a {}".format(obj_id))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj_id,
@@ -946,7 +1000,7 @@ class Agent:
                         if interactable_poses is not None:
                             elementToIDMap[frameElement] = obj_id
                             object_detection_msg[frameElement] = interactable_poses
-                    elif frameElement in utils.cleanObjectID(obj_id):  # in self.frameElements:
+                    elif frameElement in utils.cleanObjectID(obj_id) and frameElement.startswith("*"): 
                         if (
                             "Slice" in utils.cleanObjectID(obj_id)
                             and "Slice" not in frameElement
@@ -971,7 +1025,6 @@ class Agent:
                             # print("[AGENT]: Adding poses for {} to frameElement {} ".format(obj_id, frameElement))
         except:
             pass
-        # print(object_detection_m/sg)
         if self.mode == "sfm":
             self.handleObservation(object_detection_msg)
         # print(object_detection_msg)
