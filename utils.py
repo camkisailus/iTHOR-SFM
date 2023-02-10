@@ -180,6 +180,70 @@ def loadFramesFromALFRED(goal_description):
         for frame in frames:
             for frameElement in frame.core_frame_elements:
                 objects.add(frameElement)
+    elif "pick_heat" in goal_description:
+        # form is pick_heat_then_place_in_recep-{obj}-None-{target}-11
+        obj = goal_description.split("-")[1]
+        target = goal_description.split("-")[3]
+        if "Sliced" in obj:
+            raise TypeError("This is not setup to deal with sliced objects yet")
+        # open microwave
+        # grasp obj
+        # HEAT
+            # put obj in microwave
+            # close microwave
+            # heat food
+            # open microwave
+        # grasp obj
+        # pub obj on target
+        open_microwave_frame = {
+                "name": "Open_Microwave",
+                "description": "Open a Microwave",
+                "frame_elements": [{"name":"Microwave", "is_core":True}]
+        }
+        frames.append(Frame(open_microwave_frame))
+        grasp_obj_frame = {
+            "name": "Grasp_{}".format(obj),
+            "description": "Grasp a {}".format(obj),
+            "frame_elements": [{"name": obj, "is_core":True}]
+        }
+        frames.append(Frame(grasp_obj_frame))
+        heat_obj_frame = {
+            "name": "Heat_{}".format(obj),
+            "description": "Heat {} in a microwave".format(obj),
+            "frame_elements": [{"name":obj, "is_core":True}, {"name":"Microwave", "is_core":True}],
+            "preconditions": [
+                {"name": "Open_Microwave"},
+                {"name": "Grasp_{}".format(obj)}
+            ]
+        }
+        frames.append(Frame(heat_obj_frame))
+        put_obj_on_target_frame = {
+            "name": "Put_{}_on_{}".format(obj, target),
+            "description": "Put a {} on a {}".format(obj, target),
+            "frame_elements": [
+                {"name": obj, "is_core": True},
+                {"name": target, "is_core": True},
+            ],
+            "preconditions": [{"name": "Grasp_{}".format(obj)}],
+        }
+        frames.append(Frame(put_obj_on_target_frame))
+        pick_heat_place_frame = {
+            "name": "Pick_heat_place_{}_{}".format(obj, target),
+            "description": "Heat a {} and then place it on a {}".format(obj, target),
+            "frame_elements":[
+                {"name": obj, "is_core":True},
+                {"name": "Microwave", "is_core":True},
+                {"name": target, "is_core":True}
+            ],
+            "preconditions":[
+                {"name":"Heat_{}".format(obj)},
+                {"name": "Put_{}_on_{}".format(obj, target)}
+            ]
+        }
+        frames.append(Frame(pick_heat_place_frame))
+        for frame in frames:
+            for frameElement in frame.core_frame_elements:
+                objects.add(frameElement)
     return frames, objects
 
 

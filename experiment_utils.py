@@ -17,8 +17,8 @@ def chunkExperiments():
                     wf.write(line+"\n")
 def createSummary():
     data = {}
-    for i in range(15):
-        fname = "look_at_chunk_{}_results.txt".format(i)
+    for i in range(20):
+        fname = "pick_and_place_simple_{}_results.txt".format(i)
         print("Loading {}".format(fname))
         fpath = os.path.join(root, fname)
         # if not os.path.exists(fpath):
@@ -37,7 +37,7 @@ def createSummary():
                     data['result'] = [result]
                 # print("{}: {}".format(full_trial_name, result))
     df = pandas.DataFrame(data=data)
-    df.to_csv(os.path.join(root, "look_at_summary.csv"), sep=",")
+    df.to_csv(os.path.join(root, "pick_and_place_simple_summary.csv"), sep=",")
     print(df)
 
-chunkExperiments()
+createSummary()

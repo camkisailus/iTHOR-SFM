@@ -76,7 +76,7 @@ class Agent:
             # Has a map of all obj_ids to interactable poses
             for obj in controller.last_event.metadata["objects"]:
                 for frameElement in self.frameElements:
-                    if frameElement in obj["objectType"]:
+                    if frameElement == obj["objectType"]:
                         print("Getting poses for: {}".format(obj["objectType"]))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
@@ -313,6 +313,8 @@ class Agent:
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
+            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.objectInGripper = ""
             if self.verbose:
                 print("[AGENT]: Force object placement")
             return True
@@ -330,6 +332,8 @@ class Agent:
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
+            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.objectInGripper = ""
             if self.verbose:
                 print("[AGENT]: Force object placement")
             return True
@@ -342,6 +346,62 @@ class Agent:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
             return False
+
+    def close(self, target):
+        return self.controller.step(
+            action="CloseObject",
+            objectId=target,
+            forceAction=False
+        ).metadata["lastActionSuccess"]
+    
+    def toggle(self, target, mode):
+        if mode == "on":
+            return self.controller.step(
+                action="ToggleObjectOn",
+                objectId=target,
+                forceAction=False
+            ).metadata["lastActionSuccess"]
+        elif mode == "off":
+            return self.controller.step(
+                action="ToggleObjectOff",
+                objectId=target,
+                forceAction=False
+            ).metadata["lastActionSuccess"]
+        else:
+            raise ValueError("Invalid mode for toggle. Expected {on, off}, got {}".format(mode))
+        
+    def heat(self, object, target):
+        if self.verbose:
+            print("Entering heat({}, {})".format(object, target))
+        # put obj in microwave
+        if self.put(target):
+            if self.verbose:
+                print("Put {} in Microwave".format(object))
+            if self.close(target):
+                if self.verbose:
+                    print("Closed Microwave door")
+                if self.toggle(target, mode="on"):
+                    if self.verbose:
+                        print("Microwave On!")
+                    if self.toggle(target, mode="off"):
+                        if self.verbose:
+                            print("Done cooking {}".format(object))
+                        if self.open(target):
+                            if self.verbose:
+                                print("Opened microwave")
+                            return True
+                        else:
+                            print("Open Microwave Failed")
+                    else:
+                        print("TurnOff Microwave Failed")
+                else:
+                    print("TurnOn Microwave Failed")
+            else:
+                print("Close Microwave Failed")
+        else:
+            print("Put {} in Microwave failed".format(object))
+        return False
+
 
 
     def put(self, target=None):
@@ -366,6 +426,8 @@ class Agent:
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
+            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.objectInGripper = ""
             return True, "Success"
         else:
             err = event.metadata["errorMessage"]
@@ -689,8 +751,8 @@ class Agent:
                 if self.verbose:
                     print("[AGENT]: Put {} on {}!".format(object, target))
                 self.state.action_history.append("Put_{}_on_{}".format(object, target))
+                self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
                 self.state.objectInGripper = ""
-                self.state.action_history.remove("Grasp_{}".format(object))
                 # print("Updated the action history")
                 self.updateFilters()
                 self.saveDistributions()
@@ -749,6 +811,74 @@ class Agent:
         if not underTarget:
             return False
 
+    def heatObject(self, object:str, filter:FrameParticleFilter)->bool:
+        if self.verbose:
+            print(
+                "[AGENT]: Entering heatObject({}, {})".format(
+                    object, filter.label
+                )
+            )
+        objHeated = False
+        topKParticles = filter.getMaxWeightParticles()
+        attempts = 0
+        while not objHeated and attempts < self.retries:
+            currentBestEstimate = topKParticles[0][0]
+            navGoal = {
+                "x": currentBestEstimate[0],
+                "z": currentBestEstimate[1],
+                "yaw": currentBestEstimate[2],
+            }
+            path = self.nav.planPath(self.cur_pose, navGoal)
+            for step in path:
+                self.stepPath(step)
+                self.processRGB()
+                #self.handleObservation(object_detection_msg)
+            obj_id = self.objectIdFromRGB(object_name="Microwave")
+            if obj_id is not None:
+                if self.verbose:
+                    print(
+                        "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
+                            navGoal["x"], navGoal["z"], navGoal["yaw"], "Microwave", obj_id
+                        )
+                    )
+            else:
+                if self.verbose:
+                    print(
+                        "[AGENT]: No {} seen at ({}, {}, {})".format(
+                            "Microwave", navGoal["x"], navGoal["z"], navGoal["yaw"]
+                        )
+                    )
+                    print("[AGENT]: Updating Filters and saving Distributions")
+                self.updateFilters()
+                self.saveDistributions()
+                topKParticles = filter.getMaxWeightParticles()
+                attempts += 1
+                continue
+            if self.heat(object, obj_id):
+                if self.verbose:
+                    print("[AGENT]: Heated {}!".format(object))
+                self.state.action_history.append("Heat_{}".format(object))
+                self.updateFilters()
+                self.saveDistributions()
+                objHeated = True
+                return True
+            else:
+                if self.verbose:
+                    print("[AGENT]: Heat {} Failed".format(object))
+                self.updateFilters()
+                self.saveDistributions()
+                topKParticles = filter.getMaxWeightParticles()
+                attempts += 1
+        if not objHeated:
+            if self.verbose:
+                print(
+                    "[AGENT]: Open {} failed after {} retries".format(
+                        target, self.retries
+                    )
+                )
+            return False
+
+            
 
     def openReceptacle(self, target:str, filter: FrameParticleFilter)->bool:
         if self.verbose:
@@ -893,7 +1023,12 @@ class Agent:
                 return True, "Success"
             else:
                 return False, self.controller.last_event.metadata["errorMessage"]#"lookUnder({}, {}) Failed".format(obj, target)
-
+        elif frame_name.split("_")[0] == "Heat":
+            obj = frame_name.split("_")[1]
+            if self.heatObject(obj, frameFilter):
+                return True, "Success"
+            else:
+                return False, self.controller.last_event.metadata["errorMessage"]
 
         return False, "Foobar"
 
@@ -987,8 +1122,8 @@ class Agent:
             for obj_id, loc in obj_dets.items():
                 for frameElement in self.frameElements:
                     if frameElement == utils.cleanObjectID(obj_id):
-                        if self.verbose:
-                            print("I see a {}".format(obj_id))
+                        # if self.verbose:
+                        #     print("I see a {}".format(obj_id))
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj_id,

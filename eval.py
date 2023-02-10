@@ -8,6 +8,7 @@ import utils
 from multiprocessing import Process
 import random
 import concurrent.futures
+import argparse 
 # print("UHHHHHH")
 class ThorEnv:
     def __init__(self, scene_description: dict, goal_description: str, trial_id: str):
@@ -15,19 +16,19 @@ class ThorEnv:
         self.scene_desc = scene_description
         self.goal_desc = goal_description
         self.frames, self.objects = utils.loadFramesFromALFRED(goal_description)
-        # print("Frames:")
-        # for frame in self.frames:
-        #     print("\t{}".format(frame))
-        # print("Objects: {}".format(self.objects))
+        print("Frames:")
+        for frame in self.frames:
+            print("\t{}".format(frame))
+        print("Objects: {}".format(self.objects))
         # event = self.controller.step(
         #     action="SetObjectPoses", objectPoses=scene_description["object_poses"]
         # )
         # print(event.metadata)
         self.trial_name = "{}_{}".format(goal_description, trial_id)  
 
-    def __del__(self):
-        del self.controller
-        del self.ag    
+    # def __del__(self):
+    #     del self.controller
+    #     del self.ag    
     
     def init_scene(self):
         # print(
@@ -100,24 +101,31 @@ def evaluate(env:ThorEnv):
     )
     if suc:
         print("Trial {}: PASS".format(env.trial_name))
-        del env
         return True
     else:
         print("Trial {}: FAIL Reason: {}".format(env.trial_name, reason))
-        del env
         return False
    
 
-def evaluate_threaded():
+def evaluate_threaded(chunk):
     # files = [
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-HandTowel-None-CounterTop-421/trial_T20190909_145525_802579/pp/ann_1.json",
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ButterKnife-None-SideTable-28/trial_T20190908_133040_811710/pp/ann_1.json"
 
     # ]
-    with open("/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_3.txt") as tasks:
+    # chunks = [
+    #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_.txt"
+    # ]
+    chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(chunk)
+    # chunk_file= "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/test_{}.txt".format(chunk)
+    # files = [line.rstrip() for line in open()]
+    with open(chunk_file) as tasks:
         files = [line.rstrip() for line in tasks]
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for file in files:
+            if "Sliced" in file:
+                # skip these for now
+                continue
             futures = []
             with open(file) as f:
                 try:
@@ -133,7 +141,30 @@ def evaluate_threaded():
             pass
 
 if __name__ == "__main__":
-    evaluate_threaded()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--chunk")
+    # args = parser.parse_args()
+    # chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(args.chunk)
+    # with open(chunk_file) as tasks:
+    #     files = [line.rstrip() for line in tasks]
+    # for file in files:
+    #     with open(file) as f:
+    #         if "Sliced" in file:
+    #             # skip these for now
+    #             continue
+    #         try:
+    #             data = json.load(f)
+    #         except:
+    #             raise RuntimeError("JSON parse failed for {}".format(file))
+    #         scene_desc = data['scene']
+    #         goal_desc = file.split("/")[9]
+    #         env = ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0)
+    #         print("Evaluating: {}".format(goal_desc))
+    #         evaluate(env)
+
+
+    # print(args.chunk)
+    # evaluate_threaded(chunk=args.chunk)
     # print("Hello world")
     # files = [
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-HandTowel-None-CounterTop-421/trial_T20190909_145525_802579/pp/ann_1.json",
@@ -144,20 +175,20 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Candle-None-Cabinet-407/trial_T20190909_073700_129324/pp/ann_1.json"]
+    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Apple-None-SideTable-21/trial_T20190908_235409_008266/pp/ann_0.json"]
     # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
-    # for file in files:
-    #     goal_desc = file.split("/")[9]
-    #     with open(file) as f:
-    #         # print("Opening ")
-    #         try:
-    #             data = json.load(f)
-    #         except:
-    #             # print("Loading {} ".format(f))
-    #             raise RuntimeError("Foobar")
-    #         scene_desc = data["scene"]
-    #         env = ThorEnv(scene_desc, goal_desc, 0)
-    #         if evaluate(env):
-    #             print("WOOHOO!")
-    #         else:
-    #             print("AWWWW MAN :(")
+    for file in files:
+        goal_desc = file.split("/")[9]
+        with open(file) as f:
+            # print("Opening ")
+            try:
+                data = json.load(f)
+            except:
+                # print("Loading {} ".format(f))
+                raise RuntimeError("Foobar")
+            scene_desc = data["scene"]
+            env = ThorEnv(scene_desc, goal_desc, 0)
+            if evaluate(env):
+                print("WOOHOO!")
+            else:
+                print("AWWWW MAN :(")
