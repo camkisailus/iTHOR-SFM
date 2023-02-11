@@ -186,15 +186,6 @@ def loadFramesFromALFRED(goal_description):
         target = goal_description.split("-")[3]
         if "Sliced" in obj:
             raise TypeError("This is not setup to deal with sliced objects yet")
-        # open microwave
-        # grasp obj
-        # HEAT
-            # put obj in microwave
-            # close microwave
-            # heat food
-            # open microwave
-        # grasp obj
-        # pub obj on target
         open_microwave_frame = {
                 "name": "Open_Microwave",
                 "description": "Open a Microwave",
@@ -227,20 +218,6 @@ def loadFramesFromALFRED(goal_description):
             "preconditions": [{"name": "Grasp_{}".format(obj)}],
         }
         frames.append(Frame(put_obj_on_target_frame))
-        pick_heat_place_frame = {
-            "name": "Pick_heat_place_{}_{}".format(obj, target),
-            "description": "Heat a {} and then place it on a {}".format(obj, target),
-            "frame_elements":[
-                {"name": obj, "is_core":True},
-                {"name": "Microwave", "is_core":True},
-                {"name": target, "is_core":True}
-            ],
-            "preconditions":[
-                {"name":"Heat_{}".format(obj)},
-                {"name": "Put_{}_on_{}".format(obj, target)}
-            ]
-        }
-        frames.append(Frame(pick_heat_place_frame))
         for frame in frames:
             for frameElement in frame.core_frame_elements:
                 objects.add(frameElement)

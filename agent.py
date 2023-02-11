@@ -437,11 +437,8 @@ class Agent:
                 if self.verbose:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
-                # print("Force suc: {}".format(force_suc))
-                return force_suc
             elif "Target object not found" in err:
                 return self.putMoveFirst(target)
-                return move_place_suc
             else:
                 return False
             
@@ -584,24 +581,6 @@ class Agent:
             # obj_id = self.processRGB(object_name=object)
             objSeen = False
             obj_id = self.objectIdFromRGB(object_name=object)
-            # if obj_id is not None:
-            #     objSeen = True
-            # if obj_id is None:
-            #     for horizon in [-30, 0, 30, 60]:
-            #         self.setCameraHorizon(horizon)
-            #         obj_id = self.objectIdFromRGB(object_name=object)
-            #         if obj_id is not None:
-            #             if self.verbose:
-            #                 print(
-            #                     "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
-            #                         navGoal["x"], navGoal["z"], navGoal["yaw"], object, obj_id
-            #                     )
-            #                 )
-            #             objSeen=True
-            #             self.setCameraHorizon(0) # put camera back to neutral
-            #             break
-            # else:
-            #     objSeen = True
             if obj_id is None:
                 # Bad pose
                 if self.verbose:
@@ -704,12 +683,12 @@ class Agent:
             return False
 
     def putObject(self, object: str, target: str, filter: FrameParticleFilter) -> bool:
-        if self.verbose:
-            print(
-                "[AGENT]: Entering putObject({}, {}, {})".format(
-                    object, target, filter.label
-                )
+        # if self.verbose:
+        print(
+            "[AGENT]: Entering putObject({}, {}, {})".format(
+                object, target, filter.label
             )
+        )
         objectPut = False
         topKParticles = filter.getMaxWeightParticles()
         attempts = 0
@@ -751,8 +730,8 @@ class Agent:
                 if self.verbose:
                     print("[AGENT]: Put {} on {}!".format(object, target))
                 self.state.action_history.append("Put_{}_on_{}".format(object, target))
-                self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
-                self.state.objectInGripper = ""
+                # self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+                # self.state.objectInGripper = ""
                 # print("Updated the action history")
                 self.updateFilters()
                 self.saveDistributions()
@@ -952,8 +931,8 @@ class Agent:
         if self.mode == "oracle":
             return self.oracle_execute(frame_name)
         
-        # print("[AGENT]: Entering execute({})".format(frame_name))
-        # print("[AGENT]: Action history: {}".format(self.state.action_history))
+        print("[AGENT]: Entering execute({})".format(frame_name))
+        print("[AGENT]: Action history: {}".format(self.state.action_history))
         frameFilter = self.frame_filters[frame_name]
         try:
             uncompletedPreconditions = [
@@ -961,12 +940,12 @@ class Agent:
                 for pre in frameFilter.preconditions
                 if pre not in self.state.action_history
             ]
-            if self.verbose:
-                print(
-                    "[AGENT]: Uncompleted preconditions for {} are: {}".format(
-                        frame_name, uncompletedPreconditions
-                    )
+            # if self.verbose:
+            print(
+                "[AGENT]: Uncompleted preconditions for {} are: {}".format(
+                    frame_name, uncompletedPreconditions
                 )
+            )
             for precondition in uncompletedPreconditions:
                 suc, reason = self.execute(precondition)
                 if suc:
@@ -986,10 +965,10 @@ class Agent:
             # if preconditions is None
             if self.verbose:
                 print("[AGENT]: No preconditions for {}".format(frame_name))
-
+        print("Frame name: {}".format(frame_name))
         if frame_name.split("_")[0] == "Grasp":
             if self.graspObject(frame_name.split("_", 1)[1], frameFilter):
-                # print("[AGENT]: Grasped {}".format(frame_name.split("_", 1)[1]))
+                print("[AGENT]: Grasped {}".format(frame_name.split("_", 1)[1]))
                 return True, "Success"
             else:
                 if self.verbose:
@@ -1006,13 +985,16 @@ class Agent:
         elif frame_name.split("_")[0] == "Put":
             obj = frame_name.split("_")[1]  # obj to put
             receptacle = frame_name.split("_")[-1]  # receptacle
+            # print("IN PUT")
             if self.putObject(obj, receptacle, frameFilter):
+                # print("line 989: Put {} on {}".format(obj, receptacle))
                 return True, "Success"
             else:
                 return False, self.controller.last_event.metadata["errorMessage"]#"put({}, {}) Failed".format(obj, receptacle)
         elif frame_name.split("_")[0] == "Open":
             target = frame_name.split("_")[1]
             if self.openReceptacle(target, frameFilter):
+                print("Opened {}".format(target))
                 return True, "Success"
             else:
                 return False, self.controller.last_event.metadata["errorMessage"]#"openReceptacle({}) Failed".format(target)
@@ -1026,11 +1008,21 @@ class Agent:
         elif frame_name.split("_")[0] == "Heat":
             obj = frame_name.split("_")[1]
             if self.heatObject(obj, frameFilter):
+                print("Heated {}".format(obj))
+                return True, "Success"
+            else:
+                return False, self.controller.last_event.metadata["errorMessage"]
+        elif frame_name.split("_")[0] == "Pick":
+            # pick_heat_place or pick_cool_place
+            receptacle = frame_name.split("_")[-1]
+            object = frame_name.split("_")[-2]
+            if self.putObject(object, receptacle, frameFilter):
                 return True, "Success"
             else:
                 return False, self.controller.last_event.metadata["errorMessage"]
 
-        return False, "Foobar"
+        else:
+            return False, "This sim sucks"
 
     def searchFor(self, object_name):
         if self.verbose:

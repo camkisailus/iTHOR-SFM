@@ -341,6 +341,20 @@ class FrameParticleFilter(ParticleFilter):
         for frameElement in self.frame_elements:
             if frameElement in state.objectInGripper:
                 i+=1
+        # if "Put" in self.label:
+        #     # Pick and place action
+        #     if self.frame_elements[0] in state.objectInGripper:
+        #         # object of interest is receptacle we are placing in/on
+        #         i += 1
+        # elif "Pick" in self.label:
+        #     if self.frame_elements[0] in state.objectInGripper:
+        #         i += 1
+        #     for action in state.action_history:
+        #         print("[FILTER]: REMOVING MICROWAVE FROM FRAME ELEMENTS")
+        #         if "Heat" in action:
+        #             self.frame_elements.remove("Microwave")
+        #             self.frame_element_filters.pop("Microwave")
+                    # self.frame_element_filters.
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         # if self.preconditions:
         #     for precondition in self.preconditions:

@@ -84,9 +84,18 @@ class ThorEnv:
             self.objects,
             trial_name=self.trial_name,
             mode="sfm",
-            verbose=True
+            verbose=False
         )
-        self.actionToExecute = self.frames[-1].name
+        self.actions = []
+        ## TODO: Make this for all 7 metagroups. 
+        # This tells the evaluator which frames to execute AND in which order
+        for frame in self.frames:
+            if "Heat" in frame.name:
+                self.actions.insert(0, frame.name)
+            elif "Put" in frame.name:
+                self.actions.insert(1, frame.name)
+        assert(len(self.actions) == 2)
+        # self.actionToExecute = self.frames[-1].name
 
 
 def evaluate(env:ThorEnv):
@@ -95,7 +104,11 @@ def evaluate(env:ThorEnv):
         env.ag.state.action_history = []
         # raise RuntimeError("[EVALUATE]: Agent history = {}".format(env.ag.state.action_history))
     assert(env.ag.state.action_history == [])
-    suc, reason = env.ag.execute(env.actionToExecute) 
+    for action in env.actions:
+        # print("Executing {}".format(action))
+        suc, reason = env.ag.execute(action)
+        if not suc:
+            break 
     env.controller.step(
         action="Done"
     )
@@ -175,7 +188,7 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Apple-None-SideTable-21/trial_T20190908_235409_008266/pp/ann_0.json"]
+    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Bread-None-DiningTable-15/trial_T20190907_030751_816698/pp/ann_0.json"]
     # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
     for file in files:
         goal_desc = file.split("/")[9]
