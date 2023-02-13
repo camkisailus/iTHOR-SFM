@@ -184,6 +184,10 @@ def loadFramesFromALFRED(goal_description):
         # form is pick_heat_then_place_in_recep-{obj}-None-{target}-11
         obj = goal_description.split("-")[1]
         target = goal_description.split("-")[3]
+        if target == "BathtubBasin":
+            target = "Bathtub"
+        if target == "SinkBasin":
+            target= "Sink"
         if "Sliced" in obj:
             raise TypeError("This is not setup to deal with sliced objects yet")
         open_microwave_frame = {
