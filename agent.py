@@ -258,7 +258,7 @@ class Agent:
 
 
     def pickup(self, object_id):
-
+        # print("Entering pickup({})".format(object_id))
         event = self.controller.step(
             action="PickupObject",
             objectId=object_id,
@@ -267,6 +267,7 @@ class Agent:
         )
         if event.metadata["lastActionSuccess"]:
             self.state.objectInGripper = utils.cleanObjectID(object_id)
+            self.state.action_history.append("Grasp_{}".format(utils.cleanObjectID(object_id)))
             if self.verbose:
                 print("[AGENT]: Grasped obj is now: {}".format(self.state.objectInGripper))
             return True
@@ -319,6 +320,7 @@ class Agent:
                 print("[AGENT]: Force object placement")
             return True
         else:
+            # print("[AGENT] Force put object in {} failed due to {}".format(target, event.metadata["errorMessage"]))
             if self.verbose:
                 print(event.metadata["errorMessage"])
             return False
@@ -426,11 +428,14 @@ class Agent:
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
+            print("[AGENT]: Successfully put object in {}".format(target))
             self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
             self.state.objectInGripper = ""
+            # self.state.action_history.append("")
             return True, "Success"
         else:
             err = event.metadata["errorMessage"]
+            print("[AGENT]: Put object failed due to {}".format(err))
             # if self.verbose:
             # print("Put({}) failed because of: {}".format(target, err))
             if "cannot be placed in" in err or "No valid positions to place object found" in err:
@@ -598,7 +603,7 @@ class Agent:
             if self.pickup(obj_id):
                 if self.verbose:
                     print("[AGENT]: Grasped the {}!".format(object))
-                self.state.action_history.append("Grasp_{}".format(object))
+                # self.state.action_history.append("Grasp_{}".format(object))
                 objGrasped = True
                 return True
             else:
@@ -724,15 +729,12 @@ class Agent:
                 topKParticles = filter.getMaxWeightParticles()
                 attempts += 1
                 continue
-            put_suc = self.put(obj_id)
+            # put_suc = self.put(obj_id)
             # print("Put suc: {}".format(put_suc))
-            if put_suc: #self.put(obj_id):
+            if self.put(obj_id):
                 if self.verbose:
                     print("[AGENT]: Put {} on {}!".format(object, target))
                 self.state.action_history.append("Put_{}_on_{}".format(object, target))
-                # self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
-                # self.state.objectInGripper = ""
-                # print("Updated the action history")
                 self.updateFilters()
                 self.saveDistributions()
                 objectPut = True
@@ -852,7 +854,7 @@ class Agent:
             if self.verbose:
                 print(
                     "[AGENT]: Open {} failed after {} retries".format(
-                        target, self.retries
+                        object, self.retries
                     )
                 )
             return False
@@ -961,11 +963,11 @@ class Agent:
                     if self.verbose:
                         print(reason)
                     return False, reason
+            print("[AGENT]: Completed all preconditions for {}".format(frame_name))
         except TypeError:
             # if preconditions is None
             if self.verbose:
                 print("[AGENT]: No preconditions for {}".format(frame_name))
-        print("Frame name: {}".format(frame_name))
         if frame_name.split("_")[0] == "Grasp":
             if self.graspObject(frame_name.split("_", 1)[1], frameFilter):
                 print("[AGENT]: Grasped {}".format(frame_name.split("_", 1)[1]))
@@ -1056,34 +1058,25 @@ class Agent:
 
     def objectIdFromRGB(self, object_name:str):
         objSeen = False
-        objId = None
         # Check at current Horizon
         obj_dets = self.controller.last_event.instance_detections2D
-        for obj_id, loc in obj_dets.items():
+        for obj_id in obj_dets.keys():
             if object_name == utils.cleanObjectID(obj_id):
                 if self.verbose:
-                    print("[AGENT]: Observed at {} with id {}".format(object_name, obj_id))
+                    print("[AGENT]: Observed a {} with id {}".format(object_name, obj_id))
                 objSeen = True
-                objId = obj_id
+                return obj_id
         if not objSeen:
             # print("[AGENT]: Iterating through horizons")
             for horizon in [-30, 0, 30, 60]:
                 self.setCameraHorizon(horizon)
-                # self.controller.step(action="Done")
-                # assert(round(self.controller.last_event.metadata['agent']['cameraHorizon']) == horizon)
                 obj_dets = self.controller.last_event.instance_detections2D
-                for obj_id, loc in obj_dets.items():
+                for obj_id in obj_dets.keys():
                     if object_name == utils.cleanObjectID(obj_id):
                         if self.verbose:
-                            print("[AGENT]: Observed at {} with id {}".format(object_name, obj_id))
-                        objSeen = True
-                        objId = obj_id
-                        break
-        return objId
-
-    
-    # def needPerfectMatch(self, word):
-    #     return "Table" in word or "Lamp" in word or "Garbage" in word or "Towel" in word or "Pen" in word
+                            print("[AGENT]: Observed a {} with id {}".format(object_name, obj_id))
+                        return obj_id
+        return None
     
     def processRGB(self, object_name=None, verbose=False):
         """

@@ -16,19 +16,15 @@ class ThorEnv:
         self.scene_desc = scene_description
         self.goal_desc = goal_description
         self.frames, self.objects = utils.loadFramesFromALFRED(goal_description)
-        print("Frames:")
-        for frame in self.frames:
-            print("\t{}".format(frame))
-        print("Objects: {}".format(self.objects))
+        # print("Frames:")
+        # for frame in self.frames:
+        #     print("\t{}".format(frame))
+        # print("Objects: {}".format(self.objects))
         # event = self.controller.step(
         #     action="SetObjectPoses", objectPoses=scene_description["object_poses"]
         # )
         # print(event.metadata)
-        self.trial_name = "{}_{}".format(goal_description, trial_id)  
-
-    # def __del__(self):
-    #     del self.controller
-    #     del self.ag    
+        self.trial_name = "{}_{}".format(goal_description, trial_id)    
     
     def init_scene(self):
         # print(
@@ -188,7 +184,7 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Bread-None-DiningTable-15/trial_T20190907_030751_816698/pp/ann_0.json"]
+    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Plate-None-CounterTop-13/trial_T20190909_100939_867117/pp/ann_0.json"]
     # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
     for file in files:
         goal_desc = file.split("/")[9]
