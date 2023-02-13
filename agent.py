@@ -5,6 +5,7 @@ from particle_filters import ObjectParticleFilter, FrameParticleFilter
 import utils
 import math
 import os
+import openai
 
 ROOT = os.path.dirname(os.path.realpath(__file__))
 
@@ -18,7 +19,9 @@ class State:
 
 
 class Agent:
-    def __init__(self, controller, pose, frames, objects, trial_name, mode, verbose=True):
+    def __init__(
+        self, controller, pose, frames, objects, trial_name, mode, verbose=True
+    ):
         self.saveCount = 0
         self.trial_name = trial_name
         self.mode = mode
@@ -36,9 +39,7 @@ class Agent:
         self.topdown_frames = []
         self.object_filters = {}
         for object in objects:
-            self.object_filters[object] = ObjectParticleFilter(
-                object, self.controller
-            )
+            self.object_filters[object] = ObjectParticleFilter(object, self.controller)
         if verbose:
             print("Loaded the following object filters")
             for name, filter in self.object_filters.items():
@@ -82,7 +83,7 @@ class Agent:
                             action="GetInteractablePoses",
                             objectId=obj["objectId"],
                             rotations=[0, 90, 180, 270],
-                            #horizons=[0],
+                            # horizons=[0],
                             standings=[True],
                         ).metadata["actionReturn"]
                         print(len(interactable_poses))
@@ -92,10 +93,208 @@ class Agent:
                             self.oracle[frameElement] = interactable_poses
             for frameElement, poses in self.oracle.items():
                 print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
-        self.retries = 10 # DO NOT CHANGE
+        self.retries = 10  # DO NOT CHANGE
         if self.mode == "sfm":
             self.observeSurroundings()
-        
+        print(mode)
+        if self.mode == "saycan":
+            openai.api_key = "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"
+            self.engine = "text-davinci-002"
+            print("Executing with saycan")
+            self.sayCan_execute()
+
+    ## Saycan stuff
+    def gpt3_call(
+        self,
+        engine="text-ada-001",
+        prompt="",
+        max_tokens=128,
+        temperature=0,
+        logprobs=1,
+        echo=False,
+    ):
+        full_query = ""
+        for p in prompt:
+            full_query += p
+        # id = tuple((engine, full_query, max_tokens, temperature, logprobs, echo))
+        response = openai.Completion.create(
+            engine=engine,
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            logprobs=logprobs,
+            echo=echo,
+        )
+        return response
+
+    def gpt3_scoring(
+        self,
+        query,
+        options,
+        engine="text-ada-001",
+        limit_num_options=None,
+        option_start="\n",
+        verbose=False,
+        print_tokens=False,
+    ):
+        if limit_num_options:
+            options = options[:limit_num_options]
+        verbose and print("Scoring", len(options), "options")
+        gpt3_prompt_options = [query + option for option in options]
+        response = self.gpt3_call(
+            engine=engine,
+            prompt=gpt3_prompt_options,
+            max_tokens=0,
+            logprobs=1,
+            temperature=0,
+            echo=True,
+        )
+
+        scores = {}
+        for option, choice in zip(options, response["choices"]):
+            tokens = choice["logprobs"]["tokens"]
+            token_logprobs = choice["logprobs"]["token_logprobs"]
+
+            total_logprob = 0
+            for token, token_logprob in zip(reversed(tokens), reversed(token_logprobs)):
+                print_tokens and print(token, token_logprob)
+                if option_start is None and not token in option:
+                    break
+                if token == option_start:
+                    break
+                total_logprob += token_logprob
+                scores[option] = total_logprob
+
+            for i, option in enumerate(sorted(scores.items(), key=lambda x: -x[1])):
+                verbose and print(option[1], "\t", option[0])
+                if i >= 10:
+                    break
+        return scores, response
+
+    def makeOptions(
+        self, objects_in_scene=None, receps_in_scene=None, termination_string="done()"
+    ):
+        robot_actions = ["grasp", "slice", "put", "open", "close", "turnOn", "turnOff"]
+        objs = objects_in_scene + receps_in_scene
+        options = [termination_string]
+        for obj in objs:
+            for action in robot_actions:
+                if action == "grasp":
+                    options.append("robot.grasp({})".format(obj))
+                elif action == "slice":
+                    options.append("robot.slice({})".format(obj))
+                elif action == "put":
+                    for recep in receps_in_scene:
+                        options.append("robot.put({}, {})".format(obj, recep))
+                elif action == "open":
+                    options.append("robot.open({})".format(obj))
+                elif action == "close":
+                    options.append("robot.close({})".format(obj))
+                elif action == "turnOn":
+                    options.append("robot.turnOn({})".format(obj))
+                elif action == "turnOff":
+                    options.append("robot.turnOff({})".format(obj))
+        return options
+
+    def affordanceScoring(
+        self, options, found_objects, verbose=False, termination_string="done()"
+    ):
+        affordance_scores = {}
+        # verbose and print("")
+        for option in options:
+            if option == termination_string:
+                affordance_scores[option] = 0.2
+                continue
+            action = option.split(".")[1].split("(")[0]
+            affordance = 0
+            found_objects_cp = found_objects.copy()
+            if action == "put":
+                target_object = (
+                    option.replace("robot.{}(".format(action), "")
+                    .replace(")", "")
+                    .split(",")[0]
+                    .strip()
+                )
+                recep_object = (
+                    option.replace("robot.{}(".format(action), "")
+                    .replace(")", "")
+                    .split(",")[1]
+                    .strip()
+                )
+                if target_object in found_objects_cp:
+                    found_objects_cp.remove(target_object)
+                    if recep_object in found_objects_cp:
+                        affordance = 1
+            else:
+                obj = (
+                    option.replace("robot.{}(".format(action), "")
+                    .replace(")", "")
+                    .split(",")[0]
+                    .strip()
+                )
+                if obj in found_objects_cp:
+                    affordance = 1
+
+            affordance_scores[option] = affordance
+        print(affordance_scores)
+        return affordance_scores
+
+    def normalize_scores(self, scores):
+        max_score = max(scores.values())
+        normed_scores = {key: np.clip(scores[key] / max_score, 0, 1) for key in scores}
+        return normed_scores
+
+    def sayCan_execute(self, task="slice a pear"):
+        gpt3_context = """
+            # slice an apple
+            robot.grasp(knife)
+            robot.slice(apple)
+            done()
+
+            # heat a cup 
+            robot.open(microwave)
+            robot.grasp(cup)
+            robot.put(cup, microwave)
+            robot.close(microwave)
+            robot.turnOn(microwave)
+            robot.open(microwave)
+            done()
+
+            # put a knife on the table
+            robot.grasp(knife)
+            robot.put(knife, table)
+            done()
+
+            # put an apple slice in the microwave
+            robot.open(microwave)
+            robot.grasp(knife)
+            robot.slice(apple)
+            robot.put(appleSlice, microwave)
+            done()
+
+            # put a hand towel on the countertop
+            robot.grasp(handtowel)
+            robot.put(handtowel, countertop)
+            done()
+        """
+        full_query = gpt3_context + "\n#"+ task
+        selected_task = ""
+        objs = ["knife", "apple", "pear"] # fill these with objects seen in scene until now
+        receps = ["bowl"] # fill these with receptacles seen in scene until now 
+        options = self.makeOptions(objs, receps)
+        print("Evaluating: {} options".format(len(options)))
+        affordance_scores = self.affordanceScoring(options, objs+receps)
+        while not selected_task == "done()":
+            llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine)
+            combined_scores = {option: np.exp(llm_scores[option]) * affordance_scores[option] for option in options}
+            combined_scores = self.normalize_scores(combined_scores)
+            selected_task = max(combined_scores, key=combined_scores.get)
+            print("Selecting: ", selected_task)
+            full_query += selected_task + "\n"
+        print("Done!")
+
+
+    ## End saycan stuff
 
     def updateFilters(self):
         for objFilter in self.object_filters.values():
@@ -134,7 +333,11 @@ class Agent:
                 objectSeen.add(utils.cleanObjectID(obj_id))
             except KeyError:
                 if self.verbose:
-                    print("[AGENT]: KeyError when adding {} to filters".format(utils.cleanObjectID(obj_id)))
+                    print(
+                        "[AGENT]: KeyError when adding {} to filters".format(
+                            utils.cleanObjectID(obj_id)
+                        )
+                    )
                 # exit()
 
         for filter in self.object_filters.values():
@@ -228,34 +431,31 @@ class Agent:
                 filter.saveDistribution(self.trial_name, self.distribution_dir)
         else:
             try:
-                self.object_filters[filterName].saveDistribution(self.trial_name, self.distribution_dir)
+                self.object_filters[filterName].saveDistribution(
+                    self.trial_name, self.distribution_dir
+                )
             except KeyError:
                 pass
             try:
-                self.frame_filters[filterName].saveDistribution(self.trial_name, self.distribution_dir)
+                self.frame_filters[filterName].saveDistribution(
+                    self.trial_name, self.distribution_dir
+                )
             except KeyError:
                 pass
 
-    def setCameraHorizon(self, horizon:int):
-        curHorizon = self.controller.last_event.metadata['agent']['cameraHorizon']
+    def setCameraHorizon(self, horizon: int):
+        curHorizon = self.controller.last_event.metadata["agent"]["cameraHorizon"]
         diff = float(horizon) - float(round(curHorizon))
         if diff > 0:
             # print("Looking Down")
             # need to look down
-            event = self.controller.step(
-                action="LookDown",
-                degrees=diff
-            )
+            event = self.controller.step(action="LookDown", degrees=diff)
         elif diff < 0:
             # print("Looking up")
-            event = self.controller.step(
-                action="LookUp",
-                degrees=-1*diff
-            )
+            event = self.controller.step(action="LookUp", degrees=-1 * diff)
         else:
             return True
-        return event.metadata['lastActionSuccess']
-
+        return event.metadata["lastActionSuccess"]
 
     def pickup(self, object_id):
         # print("Entering pickup({})".format(object_id))
@@ -267,9 +467,13 @@ class Agent:
         )
         if event.metadata["lastActionSuccess"]:
             self.state.objectInGripper = utils.cleanObjectID(object_id)
-            self.state.action_history.append("Grasp_{}".format(utils.cleanObjectID(object_id)))
+            self.state.action_history.append(
+                "Grasp_{}".format(utils.cleanObjectID(object_id))
+            )
             if self.verbose:
-                print("[AGENT]: Grasped obj is now: {}".format(self.state.objectInGripper))
+                print(
+                    "[AGENT]: Grasped obj is now: {}".format(self.state.objectInGripper)
+                )
             return True
         else:
             return False
@@ -284,15 +488,12 @@ class Agent:
         return self.controller.step(
             action="DropHandObject", forceAction=False
         ).metadata["lastActionSuccess"]
-    
+
     def open(self, target):
         if self.verbose:
             print("Entering open({})".format(target))
         event = self.controller.step(
-            action="OpenObject",
-            objectId=target,
-            openness=1,
-            forceAction=False
+            action="OpenObject", objectId=target, openness=1, forceAction=False
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
@@ -302,19 +503,25 @@ class Agent:
                 # no need to open the object
                 return True
             if self.verbose:
-                print("open({}) failed because of: {}".format(target, event.metadata["errorMessage"]))
+                print(
+                    "open({}) failed because of: {}".format(
+                        target, event.metadata["errorMessage"]
+                    )
+                )
             return False
 
     def putRetry(self, target):
         """
-            ONLY use if trying to put object on non standard receptacle
+        ONLY use if trying to put object on non standard receptacle
         """
         event = self.controller.step(
             action="PutObject", objectId=target, forceAction=True, placeStationary=False
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
-            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.action_history.remove(
+                "Grasp_{}".format(self.state.objectInGripper)
+            )
             self.state.objectInGripper = ""
             if self.verbose:
                 print("[AGENT]: Force object placement")
@@ -324,17 +531,23 @@ class Agent:
             if self.verbose:
                 print(event.metadata["errorMessage"])
             return False
-    
+
     def putMoveFirst(self, target):
         self.controller.step(
-                    action="MoveHeldObjectLeft", moveMagnitude=0.1, 
+            action="MoveHeldObjectLeft",
+            moveMagnitude=0.1,
         )
         event = self.controller.step(
-            action="PutObject", objectId=target, forceAction=False, placeStationary=False
+            action="PutObject",
+            objectId=target,
+            forceAction=False,
+            placeStationary=False,
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
-            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.action_history.remove(
+                "Grasp_{}".format(self.state.objectInGripper)
+            )
             self.state.objectInGripper = ""
             if self.verbose:
                 print("[AGENT]: Force object placement")
@@ -343,7 +556,10 @@ class Agent:
             err = event.metadata["errorMessage"]
             if self.verbose:
                 print(err)
-            if "cannot be placed in" in err or "No valid positions to place object found" in err:
+            if (
+                "cannot be placed in" in err
+                or "No valid positions to place object found" in err
+            ):
                 if self.verbose:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
@@ -351,27 +567,23 @@ class Agent:
 
     def close(self, target):
         return self.controller.step(
-            action="CloseObject",
-            objectId=target,
-            forceAction=False
+            action="CloseObject", objectId=target, forceAction=False
         ).metadata["lastActionSuccess"]
-    
+
     def toggle(self, target, mode):
         if mode == "on":
             return self.controller.step(
-                action="ToggleObjectOn",
-                objectId=target,
-                forceAction=False
+                action="ToggleObjectOn", objectId=target, forceAction=False
             ).metadata["lastActionSuccess"]
         elif mode == "off":
             return self.controller.step(
-                action="ToggleObjectOff",
-                objectId=target,
-                forceAction=False
+                action="ToggleObjectOff", objectId=target, forceAction=False
             ).metadata["lastActionSuccess"]
         else:
-            raise ValueError("Invalid mode for toggle. Expected {on, off}, got {}".format(mode))
-        
+            raise ValueError(
+                "Invalid mode for toggle. Expected {on, off}, got {}".format(mode)
+            )
+
     def heat(self, object, target):
         if self.verbose:
             print("Entering heat({}, {})".format(object, target))
@@ -405,8 +617,6 @@ class Agent:
             print("Put {} in Microwave failed".format(object))
         return False
 
-
-
     def put(self, target=None):
         if self.verbose:
             print("Entering put({})".format(target))
@@ -417,20 +627,27 @@ class Agent:
                 tableTarget = self.objectIdFromRGB("Table")
                 if tableTarget is None:
                     if self.verbose:
-                        print("[AGENT]: Could not find counter or table to put object onto.")
+                        print(
+                            "[AGENT]: Could not find counter or table to put object onto."
+                        )
                     return False
                 else:
                     target = tableTarget
             else:
                 target = counterTarget
-        
+
         event = self.controller.step(
-            action="PutObject", objectId=target, forceAction=False, placeStationary=False
+            action="PutObject",
+            objectId=target,
+            forceAction=False,
+            placeStationary=False,
         )
         suc = event.metadata["lastActionSuccess"]
         if suc:
             # print("[AGENT]: Successfully put object in {}".format(target))
-            self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+            self.state.action_history.remove(
+                "Grasp_{}".format(self.state.objectInGripper)
+            )
             self.state.objectInGripper = ""
             # self.state.action_history.append("")
             return True, "Success"
@@ -439,7 +656,10 @@ class Agent:
             # print("[AGENT]: Put object failed due to {}".format(err))
             # if self.verbose:
             # print("Put({}) failed because of: {}".format(target, err))
-            if "cannot be placed in" in err or "No valid positions to place object found" in err:
+            if (
+                "cannot be placed in" in err
+                or "No valid positions to place object found" in err
+            ):
                 if self.verbose:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
@@ -447,7 +667,7 @@ class Agent:
                 return self.putMoveFirst(target)
             else:
                 return False
-            
+
     def done(self):
         self.controller.step(action="Done")
 
@@ -554,7 +774,9 @@ class Agent:
                         )
                     )
                 if self.put():
-                    self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+                    self.state.action_history.remove(
+                        "Grasp_{}".format(self.state.objectInGripper)
+                    )
                     self.state.objectInGripper = ""
                 else:
                     return False
@@ -562,7 +784,7 @@ class Agent:
         # if we haven't seen the object yet, do a random search around the environment to gather more observations
         while not filter.converged and attempts < self.retries:
             self.searchFor(object)
-            attempts+=1
+            attempts += 1
 
         objGrasped = False
         topKParticles = filter.getMaxWeightParticles()
@@ -617,7 +839,9 @@ class Agent:
         if not objGrasped:
             if self.verbose:
                 print(
-                    "[AGENT]: Grasp {} failed after {} retries".format(object, self.retries)
+                    "[AGENT]: Grasp {} failed after {} retries".format(
+                        object, self.retries
+                    )
                 )
             return False
 
@@ -635,7 +859,11 @@ class Agent:
                 "yaw": currentBestEstimate[2],
             }
             if self.verbose:
-                print("[AGENT]: Current best estimate: ({}, {})".format(navGoal['x'], navGoal['z']))
+                print(
+                    "[AGENT]: Current best estimate: ({}, {})".format(
+                        navGoal["x"], navGoal["z"]
+                    )
+                )
             path = self.nav.planPath(self.cur_pose, navGoal)
             # print(pat//h)
             for step in path:
@@ -684,7 +912,9 @@ class Agent:
         if not objSliced:
             if self.verbose:
                 print(
-                    "[AGENT]:Slice {} failed after {} retries".format(object, self.retries)
+                    "[AGENT]:Slice {} failed after {} retries".format(
+                        object, self.retries
+                    )
                 )
             return False
 
@@ -755,8 +985,8 @@ class Agent:
                     )
                 )
             return False
-    
-    def lookUnder(self, obj:str, target:str, filter: FrameParticleFilter)->bool:
+
+    def lookUnder(self, obj: str, target: str, filter: FrameParticleFilter) -> bool:
         if self.verbose:
             print("[AGENT]: Entering lookUnder({}, {})".format(obj, target))
         underTarget = False
@@ -773,12 +1003,14 @@ class Agent:
             for step in path:
                 self.stepPath(step)
                 self.processRGB()
-                #self.handleObservation(object_detection_msg)
+                # self.handleObservation(object_detection_msg)
             obj_id = self.objectIdFromRGB(object_name=target)
             if obj_id is not None:
                 if self.verbose:
                     print("[AGENT]: Used {} to examine {}!".format(target, obj))
-                self.state.action_history.append("Look_at_{}_under_{}".format(obj, target))
+                self.state.action_history.append(
+                    "Look_at_{}_under_{}".format(obj, target)
+                )
                 self.updateFilters()
                 self.saveDistributions()
                 underTarget = True
@@ -793,13 +1025,9 @@ class Agent:
         if not underTarget:
             return False
 
-    def heatObject(self, object:str, filter:FrameParticleFilter)->bool:
+    def heatObject(self, object: str, filter: FrameParticleFilter) -> bool:
         if self.verbose:
-            print(
-                "[AGENT]: Entering heatObject({}, {})".format(
-                    object, filter.label
-                )
-            )
+            print("[AGENT]: Entering heatObject({}, {})".format(object, filter.label))
         objHeated = False
         topKParticles = filter.getMaxWeightParticles()
         attempts = 0
@@ -814,13 +1042,17 @@ class Agent:
             for step in path:
                 self.stepPath(step)
                 self.processRGB()
-                #self.handleObservation(object_detection_msg)
+                # self.handleObservation(object_detection_msg)
             obj_id = self.objectIdFromRGB(object_name="Microwave")
             if obj_id is not None:
                 if self.verbose:
                     print(
                         "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
-                            navGoal["x"], navGoal["z"], navGoal["yaw"], "Microwave", obj_id
+                            navGoal["x"],
+                            navGoal["z"],
+                            navGoal["yaw"],
+                            "Microwave",
+                            obj_id,
                         )
                     )
             else:
@@ -860,14 +1092,10 @@ class Agent:
                 )
             return False
 
-            
-
-    def openReceptacle(self, target:str, filter: FrameParticleFilter)->bool:
+    def openReceptacle(self, target: str, filter: FrameParticleFilter) -> bool:
         if self.verbose:
             print(
-                "[AGENT]: Entering openReceptacle({}, {})".format(
-                    target, filter.label
-                )
+                "[AGENT]: Entering openReceptacle({}, {})".format(target, filter.label)
             )
         recepOpened = False
         topKParticles = filter.getMaxWeightParticles()
@@ -883,7 +1111,7 @@ class Agent:
             for step in path:
                 self.stepPath(step)
                 self.processRGB()
-                #self.handleObservation(object_detection_msg)
+                # self.handleObservation(object_detection_msg)
             obj_id = self.objectIdFromRGB(object_name=target)
             if obj_id is not None:
                 if self.verbose:
@@ -929,11 +1157,10 @@ class Agent:
                 )
             return False
 
-
     def execute(self, frame_name: str):
         if self.mode == "oracle":
             return self.oracle_execute(frame_name)
-        
+
         # print("[AGENT]: Entering execute({})".format(frame_name))
         # print("[AGENT]: Action history: {}".format(self.state.action_history))
         frameFilter = self.frame_filters[frame_name]
@@ -956,7 +1183,9 @@ class Agent:
                     #     "[AGENT]: Action history: {}".format(self.state.action_history)
                     # )
                     if self.verbose:
-                        print("[AGENT]: Updating filters and saving distributions after successful execution")
+                        print(
+                            "[AGENT]: Updating filters and saving distributions after successful execution"
+                        )
                     self.updateFilters()
                     self.saveDistributions()
                 else:
@@ -976,7 +1205,10 @@ class Agent:
             else:
                 if self.verbose:
                     print("[AGENT]: In Execute.... Grasp Failed")
-                return False, self.controller.last_event.metadata["errorMessage"]#Grasp({}) Failed".format(frame_name.split("_", 1)[1])
+                return (
+                    False,
+                    self.controller.last_event.metadata["errorMessage"],
+                )  # Grasp({}) Failed".format(frame_name.split("_", 1)[1])
         elif frame_name.split("_")[0] == "Slice":
             if self.sliceObj(frame_name.split("_")[1], frameFilter):
                 # get positions of object slices
@@ -984,7 +1216,10 @@ class Agent:
                 self.updateFilters()
                 return True, "Success"
             else:
-                return False, self.controller.last_event.metadata["errorMessage"]#"Slice({}) Failed".format(frame_name.split("_")[1])
+                return (
+                    False,
+                    self.controller.last_event.metadata["errorMessage"],
+                )  # "Slice({}) Failed".format(frame_name.split("_")[1])
         elif frame_name.split("_")[0] == "Put":
             obj = frame_name.split("_")[1]  # obj to put
             receptacle = frame_name.split("_")[-1]  # receptacle
@@ -993,21 +1228,30 @@ class Agent:
                 # print("line 989: Put {} on {}".format(obj, receptacle))
                 return True, "Success"
             else:
-                return False, self.controller.last_event.metadata["errorMessage"]#"put({}, {}) Failed".format(obj, receptacle)
+                return (
+                    False,
+                    self.controller.last_event.metadata["errorMessage"],
+                )  # "put({}, {}) Failed".format(obj, receptacle)
         elif frame_name.split("_")[0] == "Open":
             target = frame_name.split("_")[1]
             if self.openReceptacle(target, frameFilter):
                 # print("Opened {}".format(target))
                 return True, "Success"
             else:
-                return False, self.controller.last_event.metadata["errorMessage"]#"openReceptacle({}) Failed".format(target)
+                return (
+                    False,
+                    self.controller.last_event.metadata["errorMessage"],
+                )  # "openReceptacle({}) Failed".format(target)
         elif frame_name.split("_")[0] == "Look":
             target = frame_name.split("_")[-1]
-            obj= frame_name.split("_")[2]
+            obj = frame_name.split("_")[2]
             if self.lookUnder(obj, target, frameFilter):
                 return True, "Success"
             else:
-                return False, self.controller.last_event.metadata["errorMessage"]#"lookUnder({}, {}) Failed".format(obj, target)
+                return (
+                    False,
+                    self.controller.last_event.metadata["errorMessage"],
+                )  # "lookUnder({}, {}) Failed".format(obj, target)
         elif frame_name.split("_")[0] == "Heat":
             obj = frame_name.split("_")[1]
             if self.heatObject(obj, frameFilter):
@@ -1043,7 +1287,9 @@ class Agent:
                 ret = self.processRGB(object_name)
                 if ret is not None:
                     if self.verbose:
-                        print("[AGENT]: In searchFor() observed a {}".format(object_name))
+                        print(
+                            "[AGENT]: In searchFor() observed a {}".format(object_name)
+                        )
                 self.updateFilters()
                 # print("Saving Distribution")
                 self.saveDistributions()
@@ -1057,14 +1303,16 @@ class Agent:
             i += 1
         return False
 
-    def objectIdFromRGB(self, object_name:str):
+    def objectIdFromRGB(self, object_name: str):
         objSeen = False
         # Check at current Horizon
         obj_dets = self.controller.last_event.instance_detections2D
         for obj_id in obj_dets.keys():
             if object_name == utils.cleanObjectID(obj_id):
                 if self.verbose:
-                    print("[AGENT]: Observed a {} with id {}".format(object_name, obj_id))
+                    print(
+                        "[AGENT]: Observed a {} with id {}".format(object_name, obj_id)
+                    )
                 objSeen = True
                 return obj_id
         if not objSeen:
@@ -1075,10 +1323,14 @@ class Agent:
                 for obj_id in obj_dets.keys():
                     if object_name == utils.cleanObjectID(obj_id):
                         if self.verbose:
-                            print("[AGENT]: Observed a {} with id {}".format(object_name, obj_id))
+                            print(
+                                "[AGENT]: Observed a {} with id {}".format(
+                                    object_name, obj_id
+                                )
+                            )
                         return obj_id
         return None
-    
+
     def processRGB(self, object_name=None, verbose=False):
         """
         Process the latest RGB img
@@ -1121,13 +1373,15 @@ class Agent:
                         if interactable_poses is not None:
                             elementToIDMap[frameElement] = obj_id
                             object_detection_msg[frameElement] = interactable_poses
-                    elif frameElement in utils.cleanObjectID(obj_id) and frameElement.startswith("*"): 
+                    elif frameElement in utils.cleanObjectID(
+                        obj_id
+                    ) and frameElement.startswith("*"):
                         if (
                             "Slice" in utils.cleanObjectID(obj_id)
                             and "Slice" not in frameElement
                         ):
                             continue
-                        
+
                         interactable_poses = self.controller.step(
                             action="GetInteractablePoses",
                             objectId=obj_id,
@@ -1215,8 +1469,8 @@ class Agent:
         ]
         self.topdown_frames.append(topdown_img)
         # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/top_down/trial_{}/{}.png".format(
-            #     self.trial_name, self.cam_idx
-            # ),
+        #     self.trial_name, self.cam_idx
+        # ),
         cv2.imwrite(
             os.path.join(self.top_down_dir, "{}.png".format(self.cam_idx)),
             topdown_img,

@@ -25,7 +25,8 @@ class ThorEnv:
         # )
         # print(event.metadata)
         self.trial_name = "{}_{}".format(goal_description, trial_id)    
-    
+        self.init_scene()
+        
     def init_scene(self):
         # print(
         #     "[DRIVER]: Initializing ThorEnv with FloorPlan {} experiment is {}".format(
@@ -79,7 +80,7 @@ class ThorEnv:
             self.frames,
             self.objects,
             trial_name=self.trial_name,
-            mode="sfm",
+            mode="saycan",
             verbose=False
         )
         self.actions = []
@@ -150,6 +151,7 @@ def evaluate_threaded(chunk):
             pass
 
 if __name__ == "__main__":
+    # ag = Agent()
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--chunk")
     # args = parser.parse_args()
@@ -184,7 +186,7 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Plate-None-CounterTop-13/trial_T20190909_100939_867117/pp/ann_0.json"]
+    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Plate-None-CounterTop-1/trial_T20190909_115633_911483/pp/ann_0.json"]
     # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
     for file in files:
         goal_desc = file.split("/")[9]
@@ -197,7 +199,7 @@ if __name__ == "__main__":
                 raise RuntimeError("Foobar")
             scene_desc = data["scene"]
             env = ThorEnv(scene_desc, goal_desc, 0)
-            if evaluate(env):
-                print("WOOHOO!")
-            else:
-                print("AWWWW MAN :(")
+            # if evaluate(env):
+            #     print("WOOHOO!")
+            # else:
+            #     print("AWWWW MAN :(")
