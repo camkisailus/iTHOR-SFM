@@ -98,7 +98,7 @@ class Agent:
             self.observeSurroundings()
         print(mode)
         if self.mode == "saycan":
-            openai.api_key = "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"
+            openai.api_key = os.getenv("OPENAI_APIKEY")
             self.engine = "text-davinci-002"
             print("Executing with saycan")
             self.sayCan_execute()
@@ -245,20 +245,29 @@ class Agent:
         return normed_scores
 
     def sayCan_execute(self, task="slice a pear"):
+                    # heat a cup 
+            # robot.open(microwave)
+            # robot.grasp(cup)
+            # robot.put(cup, microwave)
+            # robot.close(microwave)
+            # robot.turnOn(microwave)
+            # robot.open(microwave)
+            # done()
         gpt3_context = """
             # slice an apple
             robot.grasp(knife)
             robot.slice(apple)
             done()
 
-            # heat a cup 
+            # put a hot pear in the sink
             robot.open(microwave)
-            robot.grasp(cup)
-            robot.put(cup, microwave)
+            robot.grasp(pear)
+            robot.put(pear, microwave)
             robot.close(microwave)
             robot.turnOn(microwave)
             robot.open(microwave)
-            done()
+            robot.grasp(pear)
+            robot.put(pear, sink)
 
             # put a knife on the table
             robot.grasp(knife)
