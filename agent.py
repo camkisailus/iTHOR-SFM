@@ -374,7 +374,7 @@ class Agent:
         
     def heat(self, object, target):
         if self.verbose:
-            print("Entering heat({}, {})".format(object, target))
+            print("[AGENT]: Entering heat({}, {})".format(object, target))
         self.processRGB()
         # put obj in microwave
         if self.put(target):
@@ -404,6 +404,29 @@ class Agent:
         else:
             print("Put {} in Microwave failed".format(object))
         return False
+    
+    def clean(self, objectToClean:str, sinkToUse:str)->bool:
+        if self.verbose:
+            print("[AGENT]: Entering clean({}, {})".format(objectToClean, sinkToUse))
+        if self.put(sinkToUse):
+            if self.verbose:
+                print("Put {} in Sink".format(objectToClean))
+                faucet_id = self.objectIdFromRGB(object_name="Faucet")
+                if self.toggle(faucet_id, mode="on"):
+                    if self.verbose:
+                        print("Sink On!")
+                    if self.toggle(faucet_id, mode="off"):
+                        if self.verbose:
+                            print("Done cleaning {}".format(object))
+                            return True
+                    else:
+                        print("TurnOff Faucet failed due to {} ".format(self.controller.last_event.metadata['errorMessage']))
+                else:
+                    print("TurnOn Faucet failed due to {} ".format(self.controller.last_event.metadata['errorMessage']))
+        return False
+
+
+
 
 
 
@@ -437,9 +460,9 @@ class Agent:
         else:
             err = event.metadata["errorMessage"]
             # print("[AGENT]: Put object failed due to {}".format(err))
-            # if self.verbose:
-            # print("Put({}) failed because of: {}".format(target, err))
-            if "cannot be placed in" in err or "No valid positions to place object found" in err:
+            if self.verbose:
+                print("[AGENT] Put({}) failed because of: {}".format(target, err))
+            if "cannot be placed in" in err or "No valid positions to place object found" in err or "NOT a receptacle":
                 if self.verbose:
                     print("[AGENT]: Invalid receptacle. Will force put now")
                 return self.putRetry(target)
@@ -488,7 +511,8 @@ class Agent:
                 obj_id = self.processRGB(object_name="Knife")
                 print("[AGENT]: Obj id: {}".format(obj_id))
                 if self.pickup(obj_id):
-                    print("[AGENT]: Grasped the knife!")
+                    # print("[AGENT]: Grasped the knife!")
+                    print("[AGENT]: AH: {} OiG: {}".format(self.state.action_history, self.state.objectInGripper))
                     knifeGrasped = True
                     break
                 else:
@@ -510,8 +534,7 @@ class Agent:
             while i < self.retries:
                 try:
                     pose = poses[i]
-                except IndexError:
-                    return False
+                except IndexError:p
                 goal = {"x": pose["x"], "z": pose["z"], "yaw": pose["rotation"]}
                 suc = self.goTo(goal)
                 if not suc:
@@ -554,8 +577,10 @@ class Agent:
                         )
                     )
                 if self.put():
-                    self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
-                    self.state.objectInGripper = ""
+                    return True
+                    # print("AH: {}, ")
+                    # self.state.action_history.remove("Grasp_{}".format(self.state.objectInGripper))
+                    # self.state.objectInGripper = ""
                 else:
                     return False
         attempts = 0
@@ -604,6 +629,7 @@ class Agent:
             if self.pickup(obj_id):
                 if self.verbose:
                     print("[AGENT]: Grasped the {}!".format(object))
+                    print("[AGENT]: AH: {} OiG: {}".format(self.state.action_history, self.state.objectInGripper))
                 # self.state.action_history.append("Grasp_{}".format(object))
                 objGrasped = True
                 return True
@@ -860,7 +886,72 @@ class Agent:
                 )
             return False
 
-            
+    def cleanObject(self, object:str, filter:FrameParticleFilter)->bool:
+        if self.verbose:
+            print(
+                "[AGENT]: Entering cleanObject({}, {})".format(
+                    object, filter.label
+                )
+            )
+        objCleaned = False
+        topKParticles = filter.getMaxWeightParticles()
+        attempts = 0
+        while not objCleaned and attempts < self.retries:
+            currentBestEstimate = topKParticles[0][0]
+            navGoal = {
+                "x": currentBestEstimate[0],
+                "z": currentBestEstimate[1],
+                "yaw": currentBestEstimate[2],
+            }
+            path = self.nav.planPath(self.cur_pose, navGoal)
+            for step in path:
+                self.stepPath(step)
+                self.processRGB()
+            sink_id = self.objectIdFromRGB(object_name="SinkBasin")
+            if sink_id is not None:
+                if self.verbose:
+                    print(
+                        "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
+                            navGoal["x"], navGoal["z"], navGoal["yaw"], "SinkBasin", sink_id
+                        )
+                    )
+            else:
+                if self.verbose:
+                    print(
+                        "[AGENT]: No {} seen at ({}, {}, {})".format(
+                            "SinkBasin", navGoal["x"], navGoal["z"], navGoal["yaw"]
+                        )
+                    )
+                    print("[AGENT]: Updating Filters and saving Distributions")
+                self.updateFilters()
+                self.saveDistributions()
+                topKParticles = filter.getMaxWeightParticles()
+                attempts += 1
+                continue
+            if self.clean(object, sink_id):
+                if self.verbose:
+                    print("[AGENT]: Cleaned {}!".format(object))
+                self.state.action_history.append("Clean_{}".format(object))
+                self.updateFilters()
+                self.saveDistributions()
+                objCleaned = True
+                return True
+            else:
+                if self.verbose:
+                    print("[AGENT]: Clean {} Failed".format(object))
+                self.updateFilters()
+                self.saveDistributions()
+                topKParticles = filter.getMaxWeightParticles()
+                attempts += 1
+        if not objCleaned:
+            if self.verbose:
+                print(
+                    "[AGENT]: Open {} failed after {} retries".format(
+                        object, self.retries
+                    )
+                )
+            return False
+
 
     def openReceptacle(self, target:str, filter: FrameParticleFilter)->bool:
         if self.verbose:
@@ -869,6 +960,14 @@ class Agent:
                     target, filter.label
                 )
             )
+        while self.state.objectInGripper != "":
+            if self.verbose:
+                print(
+                    "[AGENT]: Am currently holding {} will drop so that I can attempt to open {}".format(
+                        self.state.objectInGripper, target
+                    )
+                )
+            self.put() 
         recepOpened = False
         topKParticles = filter.getMaxWeightParticles()
         attempts = 0
@@ -1024,6 +1123,12 @@ class Agent:
             else:
                 return False, self.controller.last_event.metadata["errorMessage"]
 
+        elif frame_name.split("_")[0] == "Clean":
+            object = frame_name.split("_")[1]
+            if self.cleanObject(object, frameFilter):
+                return True, "Success"
+            else:
+                return False, self.controller.last_event.metadata['errorMessage']
         else:
             return False, "This sim sucks"
 
@@ -1061,6 +1166,12 @@ class Agent:
         objSeen = False
         # Check at current Horizon
         obj_dets = self.controller.last_event.instance_detections2D
+        objsSeen = {key:utils.cleanObjectID(key) for key in obj_dets.keys()}#set(utils.cleanObjectID(key) for key in obj_dets.keys())
+        # if object_name == "Sink":
+        #     for key, clean in objsSeen.items():
+        #         if "Sink" in key:
+        #             print("Key: {}.. CleanID: {}".format(key, clean))
+        #     print("#"*20)
         for obj_id in obj_dets.keys():
             if object_name == utils.cleanObjectID(obj_id):
                 if self.verbose:
@@ -1072,6 +1183,12 @@ class Agent:
             for horizon in [-30, 0, 30, 60]:
                 self.setCameraHorizon(horizon)
                 obj_dets = self.controller.last_event.instance_detections2D
+                objsSeen = {key:utils.cleanObjectID(key) for key in obj_dets.keys()}
+                # if object_name == "Sink":
+                #     for key, clean in objsSeen.items():
+                #         if "Sink" in key:
+                #             print("Key: {}.. CleanID: {}".format(key, clean))
+                #     print("#"*20)
                 for obj_id in obj_dets.keys():
                     if object_name == utils.cleanObjectID(obj_id):
                         if self.verbose:

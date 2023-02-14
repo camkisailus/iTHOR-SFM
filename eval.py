@@ -13,13 +13,14 @@ import argparse
 class ThorEnv:
     def __init__(self, scene_description: dict, goal_description: str, trial_id: str):
         # self.floorPlan =
+        print(goal_description)
         self.scene_desc = scene_description
         self.goal_desc = goal_description
         self.frames, self.objects = utils.loadFramesFromALFRED(goal_description)
-        # print("Frames:")
-        # for frame in self.frames:
-        #     print("\t{}".format(frame))
-        # print("Objects: {}".format(self.objects))
+        print("Frames:")
+        for frame in self.frames:
+            print("\t{}".format(frame))
+        print("Objects: {}".format(self.objects))
         # event = self.controller.step(
         #     action="SetObjectPoses", objectPoses=scene_description["object_poses"]
         # )
@@ -34,7 +35,7 @@ class ThorEnv:
         # )
         self.controller = Controller(
             agentMode="default",
-            visibilityDistance=1.0,
+            visibilityDistance=1.5,
             scene=self.scene_desc["floor_plan"],
             # step sizes
             gridSize=0.25,
@@ -49,9 +50,17 @@ class ThorEnv:
             fieldOfView=90,
             # platform=CloudRendering
         )
+        # objs = []
         # for obj in self.controller.last_event.metadata["objects"]:
-        #     print(obj["objectType"])
-        # exit()
+        #     if "Sink" in obj['objectType']:
+        #         print(obj['objectType'])
+        #         print(obj['objectId'])
+        #         print(utils.cleanObjectID(obj['objectId']))
+        #     objs.append(obj["objectType"])
+        # for obj in sorted(objs):
+        #     if obj == "SinkBasin"
+        #     print(obj)
+        # exit(s)
         event = self.controller.step(action="GetMapViewCameraProperties")
         event = self.controller.step(
             action="AddThirdPartyCamera", agentId=0, **event.metadata["actionReturn"]
@@ -79,18 +88,24 @@ class ThorEnv:
             self.frames,
             self.objects,
             trial_name=self.trial_name,
-            mode="sfm",
+            mode="oracle",
             verbose=False
         )
-        self.actions = []
+        self.actions = ["Put_AppleSliced_on_Microwave"]
         ## TODO: Make this for all 7 metagroups. 
         # This tells the evaluator which frames to execute AND in which order
-        for frame in self.frames:
-            if "Heat" in frame.name:
-                self.actions.insert(0, frame.name)
-            elif "Put" in frame.name:
-                self.actions.insert(1, frame.name)
-        assert(len(self.actions) == 2)
+        # self.actions = []
+        # for frame in self.frames:
+
+        #     if "Clean" in frame.name:
+        #         self.actions.insert(0, frame.name)
+        #     elif "Put" in frame.name:
+        #         self.actions.insert(1, frame.name)
+            # if "Heat" in frame.name:
+            #     self.actions.insert(0, frame.name)
+            # elif "Put" in frame.name:
+            #     self.actions.insert(1, frame.name)
+        # assert(len(self.actions) == 2)
         # self.actionToExecute = self.frames[-1].name
 
 
@@ -184,8 +199,14 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Plate-None-CounterTop-13/trial_T20190909_100939_867117/pp/ann_0.json"]
-    # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
+    # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-BreadSliced-None-DiningTable-27/trial_T20190908_140003_184319/pp/ann_0.json"]
+    files = [
+        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Pot-CounterTop-4/trial_T20190909_050345_143442/pp/ann_0.json",
+        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Plate-Fridge-14/trial_T20190908_081858_699793/pp/ann_0.json",
+        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pot-Fridge-26/trial_T20190907_150522_970867/pp/ann_0.json",
+        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pan-DiningTable-18/trial_T20190908_055822_495768/pp/ann_0.json",
+
+    ]
     for file in files:
         goal_desc = file.split("/")[9]
         with open(file) as f:
@@ -197,7 +218,8 @@ if __name__ == "__main__":
                 raise RuntimeError("Foobar")
             scene_desc = data["scene"]
             env = ThorEnv(scene_desc, goal_desc, 0)
-            if evaluate(env):
-                print("WOOHOO!")
-            else:
-                print("AWWWW MAN :(")
+            print("#"*20)
+            # if evaluate(env):
+            #     print("WOOHOO!")
+            # else:
+            #     print("AWWWW MAN :(")
