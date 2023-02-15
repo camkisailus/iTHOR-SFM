@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import utils
 from navigation import Node
+import os
 
 class ParticleFilter:
     def __init__(self, label, controller):
@@ -81,7 +82,7 @@ class ParticleFilter:
         # print("###############")
         return self.particles[ind]
 
-    def saveDistribution(self, trial_name):
+    def saveDistribution(self, trial_name, dir):
         cm = plt.cm.get_cmap("winter")
         fig = plt.figure(figsize=(10,10))
         axs = fig.gca()
@@ -100,13 +101,12 @@ class ParticleFilter:
         axs.set_ylabel("Z")
         axs.grid()
         fig.colorbar(sc)
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
+        #         trial_name, self.label, self.saveIdx
         fig.savefig(
-            "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
-                trial_name, self.label, self.saveIdx
+            os.path.join(dir, "{}_{}".format(self.label, self.saveIdx))
             # "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/distributions/trial_{}/{}_{}.png".format(
             #     trial_name, self.label, self.saveIdx
-    
-            )
         )
         # fig.savefig(
         #     "/home/daksh/Desktop/iTHOR-SFM/distributions/{}_{}.png".format(
@@ -128,6 +128,7 @@ class ObjectParticleFilter(ParticleFilter):
         )  # list of interactable poses ({'x', 'z', 'yaw'}) for object
         self.negative_regions = []  # list of boundaries (min_x, max_x, min_z, max_z)
         self.negative_poses = []
+        self.converged = False
 
     def addObservation(self, interactablePoses):
         self.observations = []
@@ -135,6 +136,8 @@ class ObjectParticleFilter(ParticleFilter):
             self.observations.append(
                 {"x": pose["x"], "z": pose["z"], "yaw": pose["rotation"]}
             )
+        self.converged = True
+        # print("[FILTERS]: {} Converged!".format(self.label))
 
     def addNegativePose(self, pose):
         self.negative_poses.append(pose)
@@ -269,6 +272,7 @@ class FrameParticleFilter(ParticleFilter):
         else:
             self.preconditions = None
         self.controller = controller
+        self.converged = False
 
     def __str__(self):
         string = "Label: {}\n\tnParticles: {}\n\tFrame Elements:\n".format(
@@ -337,6 +341,20 @@ class FrameParticleFilter(ParticleFilter):
         for frameElement in self.frame_elements:
             if frameElement in state.objectInGripper:
                 i+=1
+        # if "Put" in self.label:
+        #     # Pick and place action
+        #     if self.frame_elements[0] in state.objectInGripper:
+        #         # object of interest is receptacle we are placing in/on
+        #         i += 1
+        # elif "Pick" in self.label:
+        #     if self.frame_elements[0] in state.objectInGripper:
+        #         i += 1
+        #     for action in state.action_history:
+        #         print("[FILTER]: REMOVING MICROWAVE FROM FRAME ELEMENTS")
+        #         if "Heat" in action:
+        #             self.frame_elements.remove("Microwave")
+        #             self.frame_element_filters.pop("Microwave")
+                    # self.frame_element_filters.
         # print("Particle at ({}, {}, {})".format(particle[0], particle[1], particle[2]))
         # if self.preconditions:
         #     for precondition in self.preconditions:
@@ -397,6 +415,10 @@ class FrameParticleFilter(ParticleFilter):
             weight = self.assignWeight(self.particles[i, :], state)
             self.weights[i] += weight
         self.weights /= np.sum(self.weights)
+        if self.label.startswith("Grasp"):
+            # print("Checking convergence for {}".format(self.label))
+            # print("{} Converged? {}".format(self.frame_elements[0], self.frame_element_filters[self.frame_elements[0]].converged))
+            self.converged = True if self.frame_element_filters[self.frame_elements[0]].converged else False
 
 
 if __name__ == "__main__":

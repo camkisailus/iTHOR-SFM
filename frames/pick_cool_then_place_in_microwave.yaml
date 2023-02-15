@@ -1,0 +1,10 @@
+# semantic frame
+# pick_cool.yaml 
+
+name: Pick_Apple_Cool_Then_Place_In_Microwave
+description: Pick apple slice and cool into fridge, then place in microwave
+frame_elements:
+  - name: AppleSlice
+    is_core: True
+preconditions:
+  - name: Grasp_AppleSlice

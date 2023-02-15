@@ -376,20 +376,20 @@ class Agent:
 
         if self.put(target): 
             if self.verbose:
-                print("Put {} in Refrigerator".format(object))
+                print("Put {} in Fridge".format(object))
                 if self.close(target):
                     if self.verbose:
-                        print("Closed Refrigerator door")
+                        print("Closed Fridge door")
                         if self.open(target):
                             if self.verbose:
-                                print("Opened Refrigerator")
+                                print("Opened Fridge")
                                 return True
                         else:
-                            print("Open Refrigerator Failed")
+                            print("Open Fridge Failed")
                 else:
-                    print("Close Refrigerator Failed")
+                    print("Close Fridge Failed")
         else:
-            print("Put {} in Refrigerator failed".format(object))
+            print("Put {} in Fridge failed".format(object))
         return False
 
     def heat(self, object, target):
@@ -834,19 +834,19 @@ class Agent:
                 self.stepPath(step)
                 self.processRGB()
                 #self.handleObservation(object_detection_msg)
-            obj_id = self.objectIdFromRGB(object_name="Refrigerator")
+            obj_id = self.objectIdFromRGB(object_name="Fridge")
             if obj_id is not None:
                 if self.verbose:
                     print(
                         "[AGENT]: Image at ({}, {}, {}) saw {} with id: {}".format(
-                            navGoal["x"], navGoal["z"], navGoal["yaw"], "Refrigerator", obj_id
+                            navGoal["x"], navGoal["z"], navGoal["yaw"], "Fridge", obj_id
                         )
                     )
             else:
                 if self.verbose:
                     print(
                         "[AGENT]: No {} seen at ({}, {}, {})".format(
-                            "Refrigerator", navGoal["x"], navGoal["z"], navGoal["yaw"]
+                            "Fridge", navGoal["x"], navGoal["z"], navGoal["yaw"]
                         )
                     )
                     print("[AGENT]: Updating Filters and saving Distributions")
