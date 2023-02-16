@@ -13,14 +13,13 @@ import argparse
 class ThorEnv:
     def __init__(self, scene_description: dict, goal_description: str, trial_id: str):
         # self.floorPlan =
-        print(goal_description)
         self.scene_desc = scene_description
         self.goal_desc = goal_description
         self.frames, self.objects = utils.loadFramesFromALFRED(goal_description)
-        print("Frames:")
-        for frame in self.frames:
-            print("\t{}".format(frame))
-        print("Objects: {}".format(self.objects))
+        # print("Frames:")
+        # for frame in self.frames:
+        #     print("\t{}".format(frame))
+        # print("Objects: {}".format(self.objects))
         # event = self.controller.step(
         #     action="SetObjectPoses", objectPoses=scene_description["object_poses"]
         # )
@@ -88,10 +87,22 @@ class ThorEnv:
             self.frames,
             self.objects,
             trial_name=self.trial_name,
-            mode="oracle",
+            mode="sfm",
             verbose=False
         )
-        self.actions = ["Put_AppleSliced_on_Microwave"]
+        self.actions = []
+        ## PP_Simple
+        for frame in self.frames:
+            if "Open" in frame.name:
+                self.actions.insert(0, frame.name)
+            elif "Put" in frame.name:
+                self.actions.insert(1, frame.name)
+        ## Look_at
+        # for frame in self.frames:
+        #     if "Look_at" in frame.name:
+        #         self.actions.append(frame.name)
+        # print(self.actions)
+        
         ## TODO: Make this for all 7 metagroups. 
         # This tells the evaluator which frames to execute AND in which order
         # self.actions = []
@@ -140,16 +151,13 @@ def evaluate_threaded(chunk):
     # chunks = [
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_.txt"
     # ]
-    chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(chunk)
+    chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pp_simple_chunk_{}.txt".format(chunk)
     # chunk_file= "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/test_{}.txt".format(chunk)
     # files = [line.rstrip() for line in open()]
     with open(chunk_file) as tasks:
         files = [line.rstrip() for line in tasks]
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for file in files:
-            if "Sliced" in file:
-                # skip these for now
-                continue
             futures = []
             with open(file) as f:
                 try:
@@ -165,17 +173,14 @@ def evaluate_threaded(chunk):
             pass
 
 if __name__ == "__main__":
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--chunk")
-    # args = parser.parse_args()
-    # chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(args.chunk)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--chunk")
+    args = parser.parse_args()
+    # chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/look_at_chunk_{}.txt".format(args.chunk)
     # with open(chunk_file) as tasks:
     #     files = [line.rstrip() for line in tasks]
     # for file in files:
     #     with open(file) as f:
-    #         if "Sliced" in file:
-    #             # skip these for now
-    #             continue
     #         try:
     #             data = json.load(f)
     #         except:
@@ -188,7 +193,7 @@ if __name__ == "__main__":
 
 
     # print(args.chunk)
-    # evaluate_threaded(chunk=args.chunk)
+    evaluate_threaded(chunk=args.chunk)
     # print("Hello world")
     # files = [
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-HandTowel-None-CounterTop-421/trial_T20190909_145525_802579/pp/ann_1.json",
@@ -200,26 +205,26 @@ if __name__ == "__main__":
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
     # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-BreadSliced-None-DiningTable-27/trial_T20190908_140003_184319/pp/ann_0.json"]
-    files = [
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Pot-CounterTop-4/trial_T20190909_050345_143442/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Plate-Fridge-14/trial_T20190908_081858_699793/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pot-Fridge-26/trial_T20190907_150522_970867/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pan-DiningTable-18/trial_T20190908_055822_495768/pp/ann_0.json",
+    # files = [
+    #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Pot-CounterTop-4/trial_T20190909_050345_143442/pp/ann_0.json",
+    #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Plate-Fridge-14/trial_T20190908_081858_699793/pp/ann_0.json",
+    #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pot-Fridge-26/trial_T20190907_150522_970867/pp/ann_0.json",
+    #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pan-DiningTable-18/trial_T20190908_055822_495768/pp/ann_0.json",
 
-    ]
-    for file in files:
-        goal_desc = file.split("/")[9]
-        with open(file) as f:
-            # print("Opening ")
-            try:
-                data = json.load(f)
-            except:
-                # print("Loading {} ".format(f))
-                raise RuntimeError("Foobar")
-            scene_desc = data["scene"]
-            env = ThorEnv(scene_desc, goal_desc, 0)
-            print("#"*20)
-            # if evaluate(env):
-            #     print("WOOHOO!")
-            # else:
-            #     print("AWWWW MAN :(")
+    # ]
+    # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-TomatoSliced-None-Fridge-6/trial_T20190907_233305_019895/pp/ann_1.json"]
+    # for file in files:
+    #     goal_desc = file.split("/")[9]
+    #     with open(file) as f:
+    #         # print("Opening ")
+    #         try:
+    #             data = json.load(f)
+    #         except:
+    #             # print("Loading {} ".format(f))
+    #             raise RuntimeError("Foobar")
+    #         scene_desc = data["scene"]
+    #         env = ThorEnv(scene_desc, goal_desc, 0)
+    #         if evaluate(env):
+    #             print("WOOHOO!")
+    #         else:
+    #             print("AWWWW MAN :(")

@@ -715,12 +715,12 @@ class Agent:
             return False
 
     def putObject(self, object: str, target: str, filter: FrameParticleFilter) -> bool:
-        # if self.verbose:
-        print(
-            "[AGENT]: Entering putObject({}, {}, {})".format(
-                object, target, filter.label
+        if self.verbose:
+            print(
+                "[AGENT]: Entering putObject({}, {}, {})".format(
+                    object, target, filter.label
+                )
             )
-        )
         objectPut = False
         topKParticles = filter.getMaxWeightParticles()
         attempts = 0

@@ -3,5 +3,7 @@ __pycache__/
 top_down/
 distributions/
 look_at/
+look_at_full/
+pick_and_place_simple/
 *.txt
 *.mp4
