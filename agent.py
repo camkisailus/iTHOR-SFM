@@ -37,40 +37,62 @@ class Agent:
         self.idx = 0
         self.cam_idx = 0
         self.topdown_frames = []
-        self.object_filters = {}
-        for object in objects:
-            self.object_filters[object] = ObjectParticleFilter(object, self.controller)
-        if verbose:
-            print("Loaded the following object filters")
-            for name, filter in self.object_filters.items():
-                print("Name: {}".format(name))
-        self.frame_filters = {}
-        for frame in frames:
-            filter = FrameParticleFilter(
-                frame.name,
-                preconditions=frame.preconditions,
-                core_frame_elements=frame.core_frame_elements,
-                controller=self.controller,
-            )
-            for frame_element in frame.core_frame_elements:
-                filter.addFrameElementFilter(
-                    frame_element, self.object_filters[frame_element]
-                )
-            self.frame_filters[frame.name] = filter
-        for frame in frames:
-            if frame.preconditions is not None:
-                for precondition in frame.preconditions:
-                    self.frame_filters[frame.name].addPreconditionFilter(
-                        precondition, self.frame_filters[precondition]
-                    )
-        if verbose:
-            print("Loaded the following frame filters")
-            for filter in self.frame_filters.values():
-                print(filter)
-        # exit()
-
         self.state = State(self.cur_pose)
-        self.frameElements = [label for label in self.object_filters.keys()]
+        if self.mode == "saycan":
+            openai.api_key = os.getenv("OPENAI_APIKEY")
+            self.engine = "text-curie-001"
+            if self.verbose:
+                print("Executing with saycan")
+            self.object_properties = {}
+            for obj in self.controller.last_event.metadata["objects"]:
+                # ["grasp", "slice", "put", "open", "close", "turnOn", "turnOff", "goTo"]
+                self.object_properties[obj['objectType']] = {
+                    'grasp': obj['pickupable'],
+                    'slice': obj['sliceable'],
+                    'receptacle': obj['receptacle'],
+                    'open': obj['openable'],
+                    'close': obj['openable'], # if we can open we can also close
+                    'turnOn': obj['toggleable'],
+                    'turnOff': obj['toggleable'],
+                    'objectId': obj['objectId']
+                }
+            # for obj, abilities in self.object_properties.items():
+            #     print("{}\n\t{}".format(obj, abilities))
+                # print(obj["objectType"])
+        elif self.mode == "sfm":
+            self.object_filters = {}
+            for object in objects:
+                self.object_filters[object] = ObjectParticleFilter(object, self.controller)
+            if verbose:
+                print("Loaded the following object filters")
+                for name, filter in self.object_filters.items():
+                    print("Name: {}".format(name))
+            self.frame_filters = {}
+            for frame in frames:
+                filter = FrameParticleFilter(
+                    frame.name,
+                    preconditions=frame.preconditions,
+                    core_frame_elements=frame.core_frame_elements,
+                    controller=self.controller,
+                )
+                for frame_element in frame.core_frame_elements:
+                    filter.addFrameElementFilter(
+                        frame_element, self.object_filters[frame_element]
+                    )
+                self.frame_filters[frame.name] = filter
+            for frame in frames:
+                if frame.preconditions is not None:
+                    for precondition in frame.preconditions:
+                        self.frame_filters[frame.name].addPreconditionFilter(
+                            precondition, self.frame_filters[precondition]
+                        )
+            if verbose:
+                print("Loaded the following frame filters")
+                for filter in self.frame_filters.values():
+                    print(filter)
+            
+            self.frameElements = [label for label in self.object_filters.keys()]
+            self.observeSurroundings()
         if mode == "oracle":
             self.oracle = {}
             self.mode = "oracle"
@@ -94,14 +116,7 @@ class Agent:
             for frameElement, poses in self.oracle.items():
                 print("FrameElement: {} nPoses: {}".format(frameElement, len(poses)))
         self.retries = 10  # DO NOT CHANGE
-        if self.mode == "sfm":
-            self.observeSurroundings()
-        print(mode)
-        if self.mode == "saycan":
-            openai.api_key = os.getenv("OPENAI_APIKEY")
-            self.engine = "text-davinci-002"
-            print("Executing with saycan")
-            self.sayCan_execute()
+        
 
     ## Saycan stuff
     def gpt3_call(
@@ -172,28 +187,31 @@ class Agent:
         return scores, response
 
     def makeOptions(
-        self, objects_in_scene=None, receps_in_scene=None, termination_string="done()"
+        self, objects_in_scene=None, termination_string="done()"
     ):
-        robot_actions = ["grasp", "slice", "put", "open", "close", "turnOn", "turnOff"]
-        objs = objects_in_scene + receps_in_scene
+        robot_actions = ["grasp", "slice", "put", "open", "close", "turnOn", "turnOff", "goTo"]
+        # objs = objects_in_scene 
         options = [termination_string]
-        for obj in objs:
+        for obj in objects_in_scene:
             for action in robot_actions:
-                if action == "grasp":
+                if action == "grasp" and self.object_properties[obj]['grasp']:
                     options.append("robot.grasp({})".format(obj))
-                elif action == "slice":
+                elif action == "slice" and self.object_properties[obj]['slice']:
                     options.append("robot.slice({})".format(obj))
-                elif action == "put":
-                    for recep in receps_in_scene:
-                        options.append("robot.put({}, {})".format(obj, recep))
-                elif action == "open":
+                elif action == "put" and self.object_properties[obj]['grasp']:
+                    for recep in objects_in_scene:
+                        if self.object_properties[recep]['receptacle']:
+                            options.append("robot.put({}, {})".format(obj, recep))
+                elif action == "open" and self.object_properties[obj]['open']:
                     options.append("robot.open({})".format(obj))
-                elif action == "close":
+                elif action == "close" and self.object_properties[obj]['close']:
                     options.append("robot.close({})".format(obj))
-                elif action == "turnOn":
+                elif action == "turnOn" and self.object_properties[obj]['turnOn']:
                     options.append("robot.turnOn({})".format(obj))
-                elif action == "turnOff":
+                elif action == "turnOff" and self.object_properties[obj]['turnOff']:
                     options.append("robot.turnOff({})".format(obj))
+                elif action == "goTo":
+                    options.append("robot.goTo({})".format(obj))
         return options
 
     def affordanceScoring(
@@ -236,7 +254,7 @@ class Agent:
                     affordance = 1
 
             affordance_scores[option] = affordance
-        print(affordance_scores)
+        # print(affordance_scores)
         return affordance_scores
 
     def normalize_scores(self, scores):
@@ -244,63 +262,191 @@ class Agent:
         normed_scores = {key: np.clip(scores[key] / max_score, 0, 1) for key in scores}
         return normed_scores
 
-    def sayCan_execute(self, task="slice a pear"):
-                    # heat a cup 
-            # robot.open(microwave)
-            # robot.grasp(cup)
-            # robot.put(cup, microwave)
-            # robot.close(microwave)
-            # robot.turnOn(microwave)
-            # robot.open(microwave)
-            # done()
+    def sayCan_execute(self, task):
+        if "Look" in task:
+            object = task.split(" ")[2]
+            lamp = task.split(" ")[-1]
+            required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(lamp)]
+            print("Required Steps: {}".format(required_steps))
+        return True
         gpt3_context = """
-            # slice an apple
-            robot.grasp(knife)
-            robot.slice(apple)
+            # look at Banana under Desk Lamp
+            robot.goTo(Banana)
+            robot.grasp(Banana)
+            robot.goTo(Desk Lamp)
             done()
 
-            # put a hot pear in the sink
-            robot.open(microwave)
-            robot.grasp(pear)
-            robot.put(pear, microwave)
-            robot.close(microwave)
-            robot.turnOn(microwave)
-            robot.open(microwave)
-            robot.grasp(pear)
-            robot.put(pear, sink)
-
-            # put a knife on the table
-            robot.grasp(knife)
-            robot.put(knife, table)
+            # slice an Apple
+            robot.goTo(Knife)
+            robot.grasp(Knife)
+            robot.goTo(Apple)
+            robot.slice(Apple)
             done()
 
-            # put an apple slice in the microwave
-            robot.open(microwave)
-            robot.grasp(knife)
-            robot.slice(apple)
-            robot.put(appleSlice, microwave)
+            # put a hot Pear in the Sink Basin
+            robot.goTo(Microwave)
+            robot.open(Microwave)
+            robot.goTo(Pear)
+            robot.grasp(Pear)
+            robot.goTo(Microwave)
+            robot.put(Pear, Microwave)
+            robot.close(Microwave)
+            robot.turnOn(Microwave)
+            robot.open(Microwave)
+            robot.grasp(Pear)
+            robot.goTo(Sink)
+            robot.put(Pear, SinkBasin)
             done()
 
-            # put a hand towel on the countertop
-            robot.grasp(handtowel)
-            robot.put(handtowel, countertop)
+            # put a Knife on the Table
+            robot.goTo(Knife)
+            robot.grasp(Knife)
+            robot.goTo(Table)
+            robot.put(Knife, Table)
+            done()
+
+            # put an Apple Slice in the Microwave
+            robot.goTo(Microwave)
+            robot.open(Microwave)
+            robot.goTo(Knife)
+            robot.grasp(Knife)
+            robot.goTo(Apple)
+            robot.slice(Apple)
+            robot.grasp(Apple Slice)
+            robot.goTo(Microwave)
+            robot.put(Apple Slice, Microwave)
             done()
         """
+
+        obj_pose_set = {}
+        for i in range(4):
+            # Quick observation of surroundings
+            self.stepPath("turn_right")
+            observations = self.processRGB()
+            for obj, poses in observations.items():
+                if obj != "robot_pose":
+                    for pose in poses:
+                        pose_tup = tuple((pose['x'], pose['z'], pose['rotation']))
+                        try:
+                            obj_pose_set[obj].add(pose_tup)
+                        except KeyError:
+                            obj_pose_set[obj] = set()
+                            obj_pose_set[obj].add(pose_tup)
+                # obj_pose_set[obj].add(poses)
+                # print("{} has {} interactable poses".format(obj, len(poses)))
+        
         full_query = gpt3_context + "\n#"+ task
         selected_task = ""
-        objs = ["knife", "apple", "pear"] # fill these with objects seen in scene until now
-        receps = ["bowl"] # fill these with receptacles seen in scene until now 
-        options = self.makeOptions(objs, receps)
+        objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
+        # receps = ["bowl"] # fill these with receptacles seen in scene until now 
+        options = self.makeOptions(objs)
         print("Evaluating: {} options".format(len(options)))
-        affordance_scores = self.affordanceScoring(options, objs+receps)
-        while not selected_task == "done()":
+        # for option in options:
+        #     print(option)
+        # exit()
+           
+        affordance_scores = self.affordanceScoring(options, objs)
+        attempts = 0
+        while not selected_task == "done()" and attempts < self.retries:
+                
             llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine)
             combined_scores = {option: np.exp(llm_scores[option]) * affordance_scores[option] for option in options}
             combined_scores = self.normalize_scores(combined_scores)
             selected_task = max(combined_scores, key=combined_scores.get)
             print("Selecting: ", selected_task)
-            full_query += selected_task + "\n"
+            success = False
+            if "grasp" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                object = selected_task.split("(")[1].split(")")[0]
+                object_id = self.objectIdFromRGB(object)
+                if object_id is None:
+                    if self.verbose:
+                        print("[AGENT]: Cannot see {} from current view".format(object))
+                else:
+                    if self.pickup(object_id):
+                        if required_steps[0] != "grasp({})".format(object):
+                            pass
+                        else:
+                            required_steps.pop(0) # pop off list since completed this
+                        success = True
+                    else:
+                        print("[AGENT]: grasp({}) unsuccessful".format(object))
+            elif "slice" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "put" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "open" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "close" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "turnOn" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "turnOff" in selected_task:
+                if len(required_steps) == 0:
+                    # Should not take an action if we are done with task
+                    return False
+                pass
+            elif "goTo" in selected_task:
+                # Pick random interactable pose and go there
+                # form is robot.goTo(object)
+                object = selected_task.split("(")[1].split(")")[0]
+                if required_steps[0] != "goTo({})".format(object):
+                    pass
+                else:
+                    required_steps.pop(0) # pop off list since completed this
+                poses = list(obj_pose_set[object])
+                navGoal = {
+                    'x': poses[0][0],
+                    'z': poses[0][1],
+                    'yaw': poses[0][2]
+                }
+                path = self.nav.planPath(self.cur_pose, navGoal)
+                for step in path:
+                    self.stepPath(step)
+                    observations = self.processRGB()
+                    for obj, poses in observations.items():
+                        if obj != "robot_pose":
+                            for pose in poses:
+                                pose_tup = tuple((pose['x'], pose['z'], pose['rotation']))
+                                try:
+                                    obj_pose_set[obj].add(pose_tup)
+                                except KeyError:
+                                    obj_pose_set[obj] = set()
+                                    obj_pose_set[obj].add(pose_tup)
+                success = True
+            if success:
+                # Successfully completed task
+                full_query += selected_task + "\n"
+            objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
+            options = self.makeOptions(objs)
+            print("Evaluating: {} options".format(len(options)))
+            affordance_scores = self.affordanceScoring(options, objs)
+            attempts += 1
+        
+        # Here we must determine if the actions succeeded or failed
         print("Done!")
+        if len(required_steps) > 0:
+            # uncompleted steps in task
+            return False
+        else:
+            return True
 
 
     ## End saycan stuff
@@ -1366,47 +1512,60 @@ class Agent:
                 "robot_pose": cur_robot_pose
             }  # dict(object_id: [interactable_poses]) dict mapping object id to all interactable poses
             # print("Looking for {}".format(self.frameElements))
-            for obj_id, loc in obj_dets.items():
-                for frameElement in self.frameElements:
-                    if frameElement == utils.cleanObjectID(obj_id):
-                        # if self.verbose:
-                        #     print("I see a {}".format(obj_id))
-                        interactable_poses = self.controller.step(
-                            action="GetInteractablePoses",
-                            objectId=obj_id,
-                            rotations=[0, 90, 180, 270],
-                            standings=[True],
-                        ).metadata["actionReturn"]
-                        # if frameElement == "BreadSlice":
-                        #     print("[AGENT]: Saw a bread slice!")
-                        if interactable_poses is not None:
-                            elementToIDMap[frameElement] = obj_id
-                            object_detection_msg[frameElement] = interactable_poses
-                    elif frameElement in utils.cleanObjectID(
-                        obj_id
-                    ) and frameElement.startswith("*"):
-                        if (
-                            "Slice" in utils.cleanObjectID(obj_id)
-                            and "Slice" not in frameElement
-                        ):
-                            continue
+            if self.mode == "sfm":
+                for obj_id, loc in obj_dets.items():
+                    for frameElement in self.frameElements:
+                        if frameElement == utils.cleanObjectID(obj_id):
+                            # if self.verbose:
+                            #     print("I see a {}".format(obj_id))
+                            interactable_poses = self.controller.step(
+                                action="GetInteractablePoses",
+                                objectId=obj_id,
+                                rotations=[0, 90, 180, 270],
+                                standings=[True],
+                            ).metadata["actionReturn"]
+                            # if frameElement == "BreadSlice":
+                            #     print("[AGENT]: Saw a bread slice!")
+                            if interactable_poses is not None:
+                                elementToIDMap[frameElement] = obj_id
+                                object_detection_msg[frameElement] = interactable_poses
+                        elif frameElement in utils.cleanObjectID(
+                            obj_id
+                        ) and frameElement.startswith("*"):
+                            if (
+                                "Slice" in utils.cleanObjectID(obj_id)
+                                and "Slice" not in frameElement
+                            ):
+                                continue
 
-                        interactable_poses = self.controller.step(
-                            action="GetInteractablePoses",
-                            objectId=obj_id,
-                            rotations=[0, 90, 180, 270],
-                            standings=[True],
-                        ).metadata["actionReturn"]
-                        # if frameElement == "BreadSlice":
-                        #     print("[AGENT]: Saw a bread slice!")
-                        if interactable_poses is not None:
-                            elementToIDMap[frameElement] = obj_id
-                            object_detection_msg[frameElement] = interactable_poses
-                            # try:
-                            #     object_detection_msg[frameElement].append(interactable_poses)
-                            # except KeyError:
-                            #     object_detection_msg[frameElement] = interactable_poses
-                            # print("[AGENT]: Adding poses for {} to frameElement {} ".format(obj_id, frameElement))
+                            interactable_poses = self.controller.step(
+                                action="GetInteractablePoses",
+                                objectId=obj_id,
+                                rotations=[0, 90, 180, 270],
+                                standings=[True],
+                            ).metadata["actionReturn"]
+                            # if frameElement == "BreadSlice":
+                            #     print("[AGENT]: Saw a bread slice!")
+                            if interactable_poses is not None:
+                                elementToIDMap[frameElement] = obj_id
+                                object_detection_msg[frameElement] = interactable_poses
+                                # try:
+                                #     object_detection_msg[frameElement].append(interactable_poses)
+                                # except KeyError:
+                                #     object_detection_msg[frameElement] = interactable_poses
+                                # print("[AGENT]: Adding poses for {} to frameElement {} ".format(obj_id, frameElement))
+            elif self.mode == 'saycan':
+                for obj_id in obj_dets.keys():
+                    interactable_poses = self.controller.step(
+                        action="GetInteractablePoses",
+                        objectId=obj_id,
+                        rotations=[0, 90, 180, 270],
+                        standings=[True],
+                    ).metadata["actionReturn"]
+                    # print("{} has {} interactable poses".format(obj_id, len(interactable_poses)))
+                    if interactable_poses is not None:
+                        # elementToIDMap[frameElement] = obj_id
+                        object_detection_msg[utils.cleanObjectID(obj_id)] = interactable_poses
         except:
             pass
         if self.mode == "sfm":

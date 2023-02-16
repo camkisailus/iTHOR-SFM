@@ -25,7 +25,7 @@ class ThorEnv:
         # )
         # print(event.metadata)
         self.trial_name = "{}_{}".format(goal_description, trial_id)    
-        self.init_scene()
+        # self.init_scene()
         
     def init_scene(self):
         # print(
@@ -86,12 +86,12 @@ class ThorEnv:
         self.actions = []
         ## TODO: Make this for all 7 metagroups. 
         # This tells the evaluator which frames to execute AND in which order
-        for frame in self.frames:
-            if "Heat" in frame.name:
-                self.actions.insert(0, frame.name)
-            elif "Put" in frame.name:
-                self.actions.insert(1, frame.name)
-        assert(len(self.actions) == 2)
+        # for frame in self.frames:
+        #     if "Heat" in frame.name:
+        #         self.actions.insert(0, frame.name)
+        #     elif "Put" in frame.name:
+        #         self.actions.insert(1, frame.name)
+        # assert(len(self.actions) == 2)
         # self.actionToExecute = self.frames[-1].name
 
 
@@ -101,19 +101,29 @@ def evaluate(env:ThorEnv):
         env.ag.state.action_history = []
         # raise RuntimeError("[EVALUATE]: Agent history = {}".format(env.ag.state.action_history))
     assert(env.ag.state.action_history == [])
-    for action in env.actions:
-        # print("Executing {}".format(action))
-        suc, reason = env.ag.execute(action)
-        if not suc:
-            break 
-    env.controller.step(
-        action="Done"
-    )
+    print(env.goal_desc)
+    if "look_at" in env.goal_desc:
+        goal_text = "Look at "
+        object = env.goal_desc.split("-")[1]
+        lamp = env.goal_desc.split("-")[3]
+        goal_text = "Look at {} under {}".format(object, lamp)
+    suc = env.ag.sayCan_execute(goal_text)
+        # print(goal_text)
+    # env.ag.sayCan_execute("Look at Statue /under Floor Lamp")
+    # for action in env.actions:
+    #     # print("Executing {}".format(action))
+    #     # exit()
+    #     suc, reason = env.ag.execute(action)
+    #     if not suc:
+    #         break 
+    # env.controller.step(
+    #     action="Done"
+    # )
     if suc:
         print("Trial {}: PASS".format(env.trial_name))
         return True
     else:
-        print("Trial {}: FAIL Reason: {}".format(env.trial_name, reason))
+        print("Trial {}: FAIL".format(env.trial_name))
         return False
    
 
@@ -152,9 +162,9 @@ def evaluate_threaded(chunk):
 
 if __name__ == "__main__":
     # ag = Agent()
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--chunk")
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--chunk")
+    args = parser.parse_args()
     # chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(args.chunk)
     # with open(chunk_file) as tasks:
     #     files = [line.rstrip() for line in tasks]
@@ -175,7 +185,7 @@ if __name__ == "__main__":
 
 
     # print(args.chunk)
-    # evaluate_threaded(chunk=args.chunk)
+    evaluate_threaded(chunk=args.chunk)
     # print("Hello world")
     # files = [
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-HandTowel-None-CounterTop-421/trial_T20190909_145525_802579/pp/ann_1.json",
@@ -186,20 +196,20 @@ if __name__ == "__main__":
     #         # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ToiletPaper-None-ToiletPaperHanger-421/trial_T20190906_182536_996833/pp/ann_1.json", 
     #         "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Vase-None-Safe-204/trial_T20190919_000336_714640/pp/ann_1.json"
     #     ]
-    files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-Plate-None-CounterTop-1/trial_T20190909_115633_911483/pp/ann_0.json"]
-    # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
-    for file in files:
-        goal_desc = file.split("/")[9]
-        with open(file) as f:
-            # print("Opening ")
-            try:
-                data = json.load(f)
-            except:
-                # print("Loading {} ".format(f))
-                raise RuntimeError("Foobar")
-            scene_desc = data["scene"]
-            env = ThorEnv(scene_desc, goal_desc, 0)
-            # if evaluate(env):
-            #     print("WOOHOO!")
-            # else:
-            #     print("AWWWW MAN :(")
+    # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/look_at_obj_in_light-CreditCard-None-FloorLamp-209/trial_T20190907_212056_467170/pp/ann_1.json"]
+    # # # # # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-Pot-None-SinkBasin-2/trial_T20190907_081313_441852/pp/ann_1.json"]
+    # for file in files:
+    #     goal_desc = file.split("/")[9]
+    #     with open(file) as f:
+    #         # print("Opening ")
+    #         try:
+    #             data = json.load(f)
+    #         except:
+    #             # print("Loading {} ".format(f))
+    #             raise RuntimeError("Foobar")
+    #         scene_desc = data["scene"]
+    #         env = ThorEnv(scene_desc, goal_desc, 0)
+    #         if evaluate(env):
+    #             print("WOOHOO!")
+    #         else:
+    #             print("AWWWW MAN :(")
