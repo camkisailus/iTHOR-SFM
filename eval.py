@@ -201,14 +201,17 @@ if __name__ == "__main__":
     #     ]
     # files = ["/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_heat_then_place_in_recep-BreadSliced-None-DiningTable-27/trial_T20190908_140003_184319/pp/ann_0.json"]
     files = [
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Pot-CounterTop-4/trial_T20190909_050345_143442/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Plate-Fridge-14/trial_T20190908_081858_699793/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pot-Fridge-26/trial_T20190907_150522_970867/pp/ann_0.json",
-        "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pan-DiningTable-18/trial_T20190908_055822_495768/pp/ann_0.json",
+        # "test.json"
+        "/Users/isaac/Documents/Classes/work/iTHOR-SFM/pick_cool_then_place_in_recep-Plate-None-CounterTop-1/trial_T20190906_205231_163340/pp/ann_0.json"
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Pot-CounterTop-4/trial_T20190909_050345_143442/pp/ann_0.json",
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-AppleSliced-Plate-Fridge-14/trial_T20190908_081858_699793/pp/ann_0.json",
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pot-Fridge-26/trial_T20190907_150522_970867/pp/ann_0.json",
+        # "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_with_movable_recep-Apple-Pan-DiningTable-18/trial_T20190908_055822_495768/pp/ann_0.json",
 
     ]
     for file in files:
-        goal_desc = file.split("/")[9]
+        goal_desc = file.split("/")[7]
+        print("Hello, here is the goal: ", goal_desc)
         with open(file) as f:
             # print("Opening ")
             try:
