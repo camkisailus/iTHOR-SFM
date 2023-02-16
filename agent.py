@@ -39,8 +39,8 @@ class Agent:
         self.topdown_frames = []
         self.state = State(self.cur_pose)
         if self.mode == "saycan":
-            openai.api_key = os.getenv("OPENAI_APIKEY")
-            self.engine = "text-curie-001"
+            openai.api_key = os.getenv("OPENAI_APIKEY2")
+            self.engine = "text-davinci-002"
             if self.verbose:
                 print("Executing with saycan")
             self.object_properties = {}
@@ -121,7 +121,7 @@ class Agent:
     ## Saycan stuff
     def gpt3_call(
         self,
-        engine="text-ada-001",
+        engine,
         prompt="",
         max_tokens=128,
         temperature=0,
@@ -267,8 +267,6 @@ class Agent:
             object = task.split(" ")[2]
             lamp = task.split(" ")[-1]
             required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(lamp)]
-            print("Required Steps: {}".format(required_steps))
-        return True
         gpt3_context = """
             # look at Banana under Desk Lamp
             robot.goTo(Banana)
@@ -340,7 +338,7 @@ class Agent:
         objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
         # receps = ["bowl"] # fill these with receptacles seen in scene until now 
         options = self.makeOptions(objs)
-        print("Evaluating: {} options".format(len(options)))
+        # print("Evaluating: {} options".format(len(options)))
         # for option in options:
         #     print(option)
         # exit()
@@ -353,7 +351,8 @@ class Agent:
             combined_scores = {option: np.exp(llm_scores[option]) * affordance_scores[option] for option in options}
             combined_scores = self.normalize_scores(combined_scores)
             selected_task = max(combined_scores, key=combined_scores.get)
-            print("Selecting: ", selected_task)
+            if self.verbose:
+                print("Selecting: ", selected_task)
             success = False
             if "grasp" in selected_task:
                 if len(required_steps) == 0:
@@ -372,7 +371,8 @@ class Agent:
                             required_steps.pop(0) # pop off list since completed this
                         success = True
                     else:
-                        print("[AGENT]: grasp({}) unsuccessful".format(object))
+                        if self.verbose:
+                            print("[AGENT]: grasp({}) unsuccessful".format(object))
             elif "slice" in selected_task:
                 if len(required_steps) == 0:
                     # Should not take an action if we are done with task
@@ -436,12 +436,14 @@ class Agent:
                 full_query += selected_task + "\n"
             objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
             options = self.makeOptions(objs)
-            print("Evaluating: {} options".format(len(options)))
+            # if self.verbose:
+            #     print("Evaluating: {} options".format(len(options)))
             affordance_scores = self.affordanceScoring(options, objs)
             attempts += 1
         
         # Here we must determine if the actions succeeded or failed
-        print("Done!")
+        if self.verbose:
+            print("Done!")
         if len(required_steps) > 0:
             # uncompleted steps in task
             return False
