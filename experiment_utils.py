@@ -1,4 +1,5 @@
 import os
+import glob
 import pandas 
 
 filepath = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple.txt"
@@ -15,6 +16,21 @@ def chunkExperiments():
             with open(writeFile, "w+") as wf:
                 for line in chunk:
                     wf.write(line+"\n")
+
+def grabConfigs():
+    pick_heat_path = "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple*/*/pp/*.json"
+    files = glob.glob(pick_heat_path)
+    pick_heat_seen = set()
+    pick_heat_files = []
+    for file in files:
+        trial = file.split("/")[9]
+        if trial not in pick_heat_seen:
+            pick_heat_seen.add(trial)
+            pick_heat_files.append(file)
+    print("{} files in pp_simple".format(len(pick_heat_files)))
+    with open(os.path.join(root, "pp_simple_experiments.txt"), "w+") as wf:
+        for file in pick_heat_files:
+            wf.write(file+"\n")
 def createSummary():
     data = {}
     for i in range(20):
@@ -39,5 +55,5 @@ def createSummary():
     df = pandas.DataFrame(data=data)
     df.to_csv(os.path.join(root, "pick_and_place_simple_summary.csv"), sep=",")
     print(df)
-
-createSummary()
+grabConfigs()
+# createSummary()

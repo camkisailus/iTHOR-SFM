@@ -9,6 +9,7 @@ from multiprocessing import Process
 import random
 import concurrent.futures
 import argparse 
+import numpy as np
 # print("UHHHHHH")
 class ThorEnv:
     def __init__(self, scene_description: dict, goal_description: str, trial_id: str):
@@ -106,7 +107,12 @@ def evaluate(env:ThorEnv):
         object = env.goal_desc.split("-")[1]
         lamp = env.goal_desc.split("-")[3]
         goal_text = "Look at {} under {}".format(object, lamp)
+    elif "simple" in env.goal_desc:
+        object = env.goal_desc.split("-")[1]
+        target = env.goal_desc.split("-")[3]
+        goal_text = "Put a {} on the {}".format(object, target)
     suc = env.ag.sayCan_execute(goal_text)
+    print("{}---{}".format(goal_text, suc))
         # print(goal_text)
     # env.ag.sayCan_execute("Look at Statue /under Floor Lamp")
     # for action in env.actions:
@@ -126,7 +132,7 @@ def evaluate(env:ThorEnv):
         return False
    
 
-def evaluate_threaded(chunk):
+def evaluate_threaded(chunk=0):
     # files = [
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-HandTowel-None-CounterTop-421/trial_T20190909_145525_802579/pp/ann_1.json",
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/alfred/data/json_2.1.0_copy/pick_and_place_simple-ButterKnife-None-SideTable-28/trial_T20190908_133040_811710/pp/ann_1.json"
@@ -135,17 +141,34 @@ def evaluate_threaded(chunk):
     # chunks = [
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_.txt"
     # ]
-    chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/look_at_full/look_at_chunk_{}.txt".format(chunk)
-    # chunk_file= "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/test_{}.txt".format(chunk)
-    # files = [line.rstrip() for line in open()]
-    with open(chunk_file) as tasks:
-        files = [line.rstrip() for line in tasks]
+    files = set()
+    exp_config = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pp_simple_experiments.txt"
+    with open(exp_config) as tasks:
+        configs = [line.rstrip() for line in tasks]
+    while len(files) < 15:
+        r = np.random.randint(0, len(configs))
+        config = configs[r]
+        if "Sliced" in config:
+            continue
+        else:
+            files.add(configs[r])
+    
+    # for i in range(15):
+    #     chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/look_at_full/look_at_chunk_{}.txt".format(i)
+    #     with open(chunk_file) as tasks:
+    #         t = [line.rstrip() for line in tasks]
+    #         rand_idx = np.random.randint(0, len(t))
+    #         # print(files[rand_idx])
+    #         file = t[rand_idx]
+    #         # print(file)
+    #         # print(file)
+    #         if "Sliced" in file:
+    #             raise RuntimeError("CAnnot deal with sliced shit rn")
+    #         else:
+    #             files.append(file)
     with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = []
         for file in files:
-            if "Sliced" in file:
-                # skip these for now
-                continue
-            futures = []
             with open(file) as f:
                 try:
                     data = json.load(f)
@@ -153,6 +176,7 @@ def evaluate_threaded(chunk):
                     raise RuntimeError("JSON parse failed")
                 scene_desc = data["scene"]
                 goal_desc = file.split("/")[9]
+                # print(goal_desc)
                 # env = ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0)
                 futures.append(executor.submit(evaluate, env=ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0)))
         for future in concurrent.futures.as_completed(futures):
@@ -162,9 +186,9 @@ def evaluate_threaded(chunk):
 if __name__ == "__main__":
     # ag = Agent()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--chunk")
-    args = parser.parse_args()
-    evaluate_threaded(chunk=args.chunk)
+    # parser.add_argument("--chunk")
+    # args = parser.parse_args()
+    evaluate_threaded()
     # chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_{}.txt".format(args.chunk)
     # with open(chunk_file) as tasks:
     #     files = [line.rstrip() for line in tasks]

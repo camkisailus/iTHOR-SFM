@@ -39,7 +39,7 @@ class Agent:
         self.topdown_frames = []
         self.state = State(self.cur_pose)
         if self.mode == "saycan":
-            openai.api_key = os.getenv("OPENAI_APIKEY2")
+            openai.api_key = os.getenv("OPENAI_APIKEY")
             self.engine = "text-davinci-002"
             if self.verbose:
                 print("Executing with saycan")
@@ -131,7 +131,7 @@ class Agent:
         full_query = ""
         for p in prompt:
             full_query += p
-        # id = tuple((engine, full_query, max_tokens, temperature, logprobs, echo))
+
         response = openai.Completion.create(
             engine=engine,
             prompt=prompt,
@@ -263,15 +263,20 @@ class Agent:
         return normed_scores
 
     def sayCan_execute(self, task):
-        if "Look" in task:
-            object = task.split(" ")[2]
-            lamp = task.split(" ")[-1]
-            required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(lamp)]
+        # if "Look" in task:
+        #     object = task.split(" ")[2]
+        #     lamp = task.split(" ")[-1]
+        #     required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(lamp)]
+        # elif "simple" in task:
+        object = task.split(" ")[2]
+        target = task.split(" ")[-1]
+        required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(target), "put({}, {})".format(object, target)]
+        self.verbose and print("required steps for {} are {}".format(task, required_steps))
         gpt3_context = """
             # look at Banana under Desk Lamp
             robot.goTo(Banana)
             robot.grasp(Banana)
-            robot.goTo(Desk Lamp)
+            robot.goTo(DeskLamp)
             done()
 
             # slice an Apple
@@ -336,21 +341,18 @@ class Agent:
         full_query = gpt3_context + "\n#"+ task
         selected_task = ""
         objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
-        # receps = ["bowl"] # fill these with receptacles seen in scene until now 
         options = self.makeOptions(objs)
-        # print("Evaluating: {} options".format(len(options)))
-        # for option in options:
-        #     print(option)
-        # exit()
-           
+        # self.verbose and print("Options: ", options)
         affordance_scores = self.affordanceScoring(options, objs)
         attempts = 0
         while not selected_task == "done()" and attempts < self.retries:
-                
-            llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine)
+            # print("Getting LM scores")/
+            llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine, verbose=self.verbose)
             combined_scores = {option: np.exp(llm_scores[option]) * affordance_scores[option] for option in options}
             combined_scores = self.normalize_scores(combined_scores)
+            # print(combined_scores)
             selected_task = max(combined_scores, key=combined_scores.get)
+            # print(selected_task)
             if self.verbose:
                 print("Selecting: ", selected_task)
             success = False
@@ -382,7 +384,21 @@ class Agent:
                 if len(required_steps) == 0:
                     # Should not take an action if we are done with task
                     return False
-                pass
+                object = selected_task.split("(")[1].split(",")[0]
+                target = selected_task.split("(")[1].split(",")[1].split(")")[0]
+                object_id = self.objectIdFromRGB(target)
+                if object_id is None:
+                    if self.verbose:
+                        print("[AGENT]: Cannot see {} from current view".format(target))
+                else:
+                    if self.put(object_id):
+                        if required_steps[0] != "put({}, {})".format(object, target):
+                            pass
+                        else:
+                            required_steps.pop(0)
+                        success = True
+                    else:
+                        self.verbose and print("[AGENT]: put({}, {}) unsuccessful".format(object, target))
             elif "open" in selected_task:
                 if len(required_steps) == 0:
                     # Should not take an action if we are done with task
@@ -436,8 +452,6 @@ class Agent:
                 full_query += selected_task + "\n"
             objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
             options = self.makeOptions(objs)
-            # if self.verbose:
-            #     print("Evaluating: {} options".format(len(options)))
             affordance_scores = self.affordanceScoring(options, objs)
             attempts += 1
         
