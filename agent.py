@@ -39,8 +39,8 @@ class Agent:
         self.topdown_frames = []
         self.state = State(self.cur_pose)
         if self.mode == "saycan":
-            openai.api_key = os.getenv("OPENAI_APIKEY")
-            self.engine = "text-davinci-002"
+            openai.api_key = os.getenv("OPENAI_APIKEY2")
+            self.engine = "text-curie-001"
             if self.verbose:
                 print("Executing with saycan")
             self.object_properties = {}
@@ -270,56 +270,56 @@ class Agent:
         # elif "simple" in task:
         object = task.split(" ")[2]
         target = task.split(" ")[-1]
-        required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(target), "put({}, {})".format(object, target)]
+        required_steps = ["goTo({})".format(object), "grasp({})".format(object), "goTo({})".format(target)]#, "put({}, {})".format(object, target)]
+        # print("required steps for {} are {}".format(task, required_steps))
         self.verbose and print("required steps for {} are {}".format(task, required_steps))
         gpt3_context = """
-            # look at Banana under Desk Lamp
+            # look at Banana under DeskLamp
             robot.goTo(Banana)
             robot.grasp(Banana)
             robot.goTo(DeskLamp)
             done()
-
-            # slice an Apple
-            robot.goTo(Knife)
-            robot.grasp(Knife)
-            robot.goTo(Apple)
-            robot.slice(Apple)
-            done()
-
-            # put a hot Pear in the Sink Basin
-            robot.goTo(Microwave)
-            robot.open(Microwave)
-            robot.goTo(Pear)
-            robot.grasp(Pear)
-            robot.goTo(Microwave)
-            robot.put(Pear, Microwave)
-            robot.close(Microwave)
-            robot.turnOn(Microwave)
-            robot.open(Microwave)
-            robot.grasp(Pear)
-            robot.goTo(Sink)
-            robot.put(Pear, SinkBasin)
-            done()
-
-            # put a Knife on the Table
-            robot.goTo(Knife)
-            robot.grasp(Knife)
-            robot.goTo(Table)
-            robot.put(Knife, Table)
-            done()
-
-            # put an Apple Slice in the Microwave
-            robot.goTo(Microwave)
-            robot.open(Microwave)
-            robot.goTo(Knife)
-            robot.grasp(Knife)
-            robot.goTo(Apple)
-            robot.slice(Apple)
-            robot.grasp(Apple Slice)
-            robot.goTo(Microwave)
-            robot.put(Apple Slice, Microwave)
-            done()
         """
+        #  # slice an Apple
+        #     robot.goTo(Knife)
+        #     robot.grasp(Knife)
+        #     robot.goTo(Apple)
+        #     robot.slice(Apple)
+        #     done()
+
+        #     # put a hot Pear in the Sink Basin
+        #     robot.goTo(Microwave)
+        #     robot.open(Microwave)
+        #     robot.goTo(Pear)
+        #     robot.grasp(Pear)
+        #     robot.goTo(Microwave)
+        #     robot.put(Pear, Microwave)
+        #     robot.close(Microwave)
+        #     robot.turnOn(Microwave)
+        #     robot.open(Microwave)
+        #     robot.grasp(Pear)
+        #     robot.goTo(Sink)
+        #     robot.put(Pear, SinkBasin)
+        #     done()
+
+        #     # put a Knife on the Table
+        #     robot.goTo(Knife)
+        #     robot.grasp(Knife)
+        #     robot.goTo(Table)
+        #     robot.put(Knife, Table)
+        #     done()
+
+        #     # put an Apple Slice in the Microwave
+        #     robot.goTo(Microwave)
+        #     robot.open(Microwave)
+        #     robot.goTo(Knife)
+        #     robot.grasp(Knife)
+        #     robot.goTo(Apple)
+        #     robot.slice(Apple)
+        #     robot.grasp(Apple Slice)
+        #     robot.goTo(Microwave)
+        #     robot.put(Apple Slice, Microwave)
+        #     done()
 
         obj_pose_set = {}
         for i in range(4):
@@ -327,7 +327,7 @@ class Agent:
             self.stepPath("turn_right")
             observations = self.processRGB()
             for obj, poses in observations.items():
-                if obj != "robot_pose":
+                if obj not in ["robot_pose", "Blinds", "Window", "Floor", "Wall", "Curtains"]:
                     for pose in poses:
                         pose_tup = tuple((pose['x'], pose['z'], pose['rotation']))
                         try:
@@ -337,24 +337,25 @@ class Agent:
                             obj_pose_set[obj].add(pose_tup)
                 # obj_pose_set[obj].add(poses)
                 # print("{} has {} interactable poses".format(obj, len(poses)))
-        
         full_query = gpt3_context + "\n#"+ task
         selected_task = ""
         objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
         options = self.makeOptions(objs)
         # self.verbose and print("Options: ", options)
         affordance_scores = self.affordanceScoring(options, objs)
+        # print("Evaluating {} options".format(len(options)))
+        # print("Affordance scores: {}", len(affordance_scores))
         attempts = 0
         while not selected_task == "done()" and attempts < self.retries:
-            # print("Getting LM scores")/
-            llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine, verbose=self.verbose)
+            attempts += 1
+            llm_scores, _ = self.gpt3_scoring(full_query, options, engine=self.engine, verbose=False)
             combined_scores = {option: np.exp(llm_scores[option]) * affordance_scores[option] for option in options}
             combined_scores = self.normalize_scores(combined_scores)
-            # print(combined_scores)
             selected_task = max(combined_scores, key=combined_scores.get)
-            # print(selected_task)
-            if self.verbose:
-                print("Selecting: ", selected_task)
+            self.verbose and print("Selecting: ", selected_task)
+            if selected_task != required_steps[0]:
+                self.verbose and print("Selected task {} does not match required step {}".format(selected_task, required_steps[0]))
+                return False
             success = False
             if "grasp" in selected_task:
                 if len(required_steps) == 0:
@@ -367,35 +368,24 @@ class Agent:
                         print("[AGENT]: Cannot see {} from current view".format(object))
                 else:
                     if self.pickup(object_id):
-                        if required_steps[0] != "grasp({})".format(object):
-                            pass
-                        else:
-                            required_steps.pop(0) # pop off list since completed this
+                        required_steps.pop(0) # pop off list since completed this
                         success = True
                     else:
-                        if self.verbose:
-                            print("[AGENT]: grasp({}) unsuccessful".format(object))
+                        self.verbose and print("[AGENT]: grasp({}) unsuccessful".format(object))
             elif "slice" in selected_task:
                 if len(required_steps) == 0:
                     # Should not take an action if we are done with task
                     return False
                 pass
             elif "put" in selected_task:
-                if len(required_steps) == 0:
-                    # Should not take an action if we are done with task
-                    return False
                 object = selected_task.split("(")[1].split(",")[0]
                 target = selected_task.split("(")[1].split(",")[1].split(")")[0]
                 object_id = self.objectIdFromRGB(target)
                 if object_id is None:
-                    if self.verbose:
-                        print("[AGENT]: Cannot see {} from current view".format(target))
+                    self.verbose and print("[AGENT]: Cannot see {} from current view".format(target))
                 else:
                     if self.put(object_id):
-                        if required_steps[0] != "put({}, {})".format(object, target):
-                            pass
-                        else:
-                            required_steps.pop(0)
+                        required_steps.pop(0)
                         success = True
                     else:
                         self.verbose and print("[AGENT]: put({}, {}) unsuccessful".format(object, target))
@@ -423,10 +413,7 @@ class Agent:
                 # Pick random interactable pose and go there
                 # form is robot.goTo(object)
                 object = selected_task.split("(")[1].split(")")[0]
-                if required_steps[0] != "goTo({})".format(object):
-                    pass
-                else:
-                    required_steps.pop(0) # pop off list since completed this
+                required_steps.pop(0) # pop off list since completed this
                 poses = list(obj_pose_set[object])
                 navGoal = {
                     'x': poses[0][0],
@@ -453,11 +440,10 @@ class Agent:
             objs = list(obj_pose_set.keys()) # fill these with objects seen in scene until now
             options = self.makeOptions(objs)
             affordance_scores = self.affordanceScoring(options, objs)
-            attempts += 1
+            # attempts += 1
         
         # Here we must determine if the actions succeeded or failed
-        if self.verbose:
-            print("Done!")
+        self.verbose and print("Done!. Required steps: {}".format(required_steps))
         if len(required_steps) > 0:
             # uncompleted steps in task
             return False

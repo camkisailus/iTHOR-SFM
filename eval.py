@@ -112,7 +112,7 @@ def evaluate(env:ThorEnv):
         target = env.goal_desc.split("-")[3]
         goal_text = "Put a {} on the {}".format(object, target)
     suc = env.ag.sayCan_execute(goal_text)
-    print("{}---{}".format(goal_text, suc))
+    # print("{}---{}".format(goal_text, suc))
         # print(goal_text)
     # env.ag.sayCan_execute("Look at Statue /under Floor Lamp")
     # for action in env.actions:
@@ -141,17 +141,20 @@ def evaluate_threaded(chunk=0):
     # chunks = [
     #     "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pick_and_place_simple/pick_and_place_simple_chunk_.txt"
     # ]
-    files = set()
-    exp_config = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/pp_simple_experiments.txt"
+    exp_config = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/look_at_experiments.txt"
     with open(exp_config) as tasks:
         configs = [line.rstrip() for line in tasks]
-    while len(files) < 15:
-        r = np.random.randint(0, len(configs))
-        config = configs[r]
-        if "Sliced" in config:
-            continue
-        else:
-            files.add(configs[r])
+    randomIndices = np.random.choice(len(configs), 50, replace=False)
+    # print(randomIndices)
+    files = [configs[i] for i in randomIndices]
+    # print(files)
+    # while len(files) < 15:
+    #     r = np.random.randint(0, len(configs))
+    #     config = configs[r]
+    #     if "Sliced" in config:
+    #         continue
+    #     else:
+    #         files.add(configs[r])
     
     # for i in range(15):
     #     chunk_file = "/home/cuhsailus/Desktop/Research/22_academic_year/iTHOR-SFM/look_at_full/look_at_chunk_{}.txt".format(i)
@@ -177,7 +180,8 @@ def evaluate_threaded(chunk=0):
                 scene_desc = data["scene"]
                 goal_desc = file.split("/")[9]
                 # print(goal_desc)
-                # env = ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0)
+                # print(goal_desc)
+                # evaluate(ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0))
                 futures.append(executor.submit(evaluate, env=ThorEnv(scene_description=scene_desc, goal_description=goal_desc, trial_id=0)))
         for future in concurrent.futures.as_completed(futures):
             # print(future.result)
@@ -185,7 +189,7 @@ def evaluate_threaded(chunk=0):
 
 if __name__ == "__main__":
     # ag = Agent()
-    parser = argparse.ArgumentParser()
+    # parser = argparse.ArgumentParser()
     # parser.add_argument("--chunk")
     # args = parser.parse_args()
     evaluate_threaded()
